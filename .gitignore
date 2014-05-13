@@ -1,0 +1,16 @@
+.project
+.settings
+.classpath
+.metadata
+target
+derby.log
+atlassian-ide-plugin.xml
+
+# IntelliJ IDEA files
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Vim files
+*.swp
