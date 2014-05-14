@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.tajo;
+package org.apache.tajo.yarn;
 
 import org.apache.commons.cli.*;
 import org.apache.commons.io.IOUtils;

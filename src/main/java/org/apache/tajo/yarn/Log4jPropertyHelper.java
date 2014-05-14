@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.tajo;
+package org.apache.tajo.yarn;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.LogManager;

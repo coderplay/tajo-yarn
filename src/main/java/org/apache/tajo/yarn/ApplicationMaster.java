@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.tajo;
+package org.apache.tajo.yarn;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.cli.*;
@@ -25,11 +25,15 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.security.SaslRpcServer;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
@@ -42,11 +46,14 @@ import org.apache.hadoop.yarn.client.api.async.NMClientAsync;
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.ipc.YarnRPC;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
+import org.apache.tajo.yarn.api.TajoYarnProtocol;
 
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -146,6 +153,8 @@ public class ApplicationMaster {
   // Tracking url to which app master publishes info for clients to monitor
   private String appMasterTrackingUrl = "";
 
+  private int appMasterRpcThreadCount = 4;
+
   // App Master configuration
   // No. of containers to run shell command on
   private int numTotalContainers = 1;
@@ -203,6 +212,9 @@ public class ApplicationMaster {
 
   private final String linux_bash_command = "bash";
   private final String windows_command = "cmd /c";
+
+  private InetSocketAddress bindAddress;
+  private Server server;
 
   /**
    * @param args Command line args
@@ -409,6 +421,8 @@ public class ApplicationMaster {
       }
     }
 
+    appMasterRpcThreadCount = Integer.parseInt(cliParser.getOptionValue(
+        "appmaster_thread_count", "4"));
     containerMemory = Integer.parseInt(cliParser.getOptionValue(
         "container_memory", "10"));
     containerVirtualCores = Integer.parseInt(cliParser.getOptionValue(
@@ -473,6 +487,28 @@ public class ApplicationMaster {
     // the RPC server
     // TODO use the rpc port info to register with the RM for the client to
     // send requests to this app master
+    YarnRPC rpc = YarnRPC.create(conf);
+
+    InetSocketAddress masterServiceAddress = new InetSocketAddress(0);
+
+    Configuration serverConf = conf;
+    // If the auth is not-simple, enforce it to be token-based.
+    serverConf = new Configuration(conf);
+    serverConf.set(
+        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
+        SaslRpcServer.AuthMethod.TOKEN.toString());
+    this.server =
+        rpc.getServer(TajoYarnProtocol.class, this, masterServiceAddress,
+            serverConf, null, appMasterRpcThreadCount);
+
+    // Enable service authorization?
+    if (conf.getBoolean(
+        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHORIZATION,
+        false)) {
+      refreshServiceAcls(conf, new TajoAMPolicyProvider());
+    }
+
+    this.server.start();
 
     // Register self with ResourceManager
     // This will start heartbeating to the RM
@@ -524,6 +560,11 @@ public class ApplicationMaster {
     finish();
 
     return success;
+  }
+
+  void refreshServiceAcls(Configuration configuration,
+                          PolicyProvider policyProvider) {
+    this.server.refreshServiceAcl(configuration, policyProvider);
   }
 
   @VisibleForTesting
@@ -902,5 +943,10 @@ public class ApplicationMaster {
     } finally {
       org.apache.commons.io.IOUtils.closeQuietly(ds);
     }
+  }
+
+
+  class TajoYarnProtocolHandler implements TajoYarnProtocol {
+
   }
 }
