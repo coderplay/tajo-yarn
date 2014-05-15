@@ -14,23 +14,20 @@
 -->
 
 <assembly>
-  <id>dist</id>
+  <id>bin</id>
   <formats>
     <format>tar.gz</format>
   </formats>
   <includeSiteDirectory>false</includeSiteDirectory>
   <dependencySets>
     <dependencySet>
-      <!--
-         Project artifact is not copied under library directory since
-         it is added to the root directory of the zip package.
-     -->
       <useProjectArtifact>false</useProjectArtifact>
       <outputDirectory>lib</outputDirectory>
       <unpack>false</unpack>
       <scope>runtime</scope>
       <excludes>
         <exclude>org.apache.hadoop:*</exclude>
+        <exclude>org.slf4j:*</exclude>
       </excludes>
       <useTransitiveFiltering>true</useTransitiveFiltering>
     </dependencySet>
@@ -56,11 +53,10 @@
     <fileSet>
       <includes>
         <include>${project.basedir}/bin/*</include>
-        <include>create-tarball.sh</include>
       </includes>
     </fileSet>
     <fileSet>
-      <directory>${project.basedir}/lib</directory>
+      <directory>${project.basedir}/tajo-dist</directory>
       <outputDirectory>tajo</outputDirectory>
     </fileSet>
   </fileSets>

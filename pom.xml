@@ -30,6 +30,11 @@
   </properties>
 
   <dependencies>
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>0.9.0</version>
+    </dependency>
     <!-- 'mvn dependency:analyze' fails to detect use of this dependency -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -172,7 +177,7 @@
             </goals>
             <configuration>
               <target>
-                <mkdir dir="${project.build.directory}/generated-sources/proto"/>
+                <mkdir dir="${project.build.directory}/generated-sources/thrift"/>
               </target>
             </configuration>
           </execution>
@@ -187,11 +192,15 @@
             <id>generate-sources</id>
             <phase>generate-sources</phase>
             <configuration>
-              <executable>protoc</executable>
+              <executable>thrift</executable>
               <arguments>
-                <argument>-I${basedir}/src/main/proto/</argument>
-                <argument>--java_out=${project.build.directory}/generated-sources/proto</argument>
-                <argument>${basedir}/src/main/proto/TajoYarnProtocol.proto</argument>
+                <argument>-I</argument>
+                <argument>${basedir}/src/main/proto/</argument>
+                <argument>--gen</argument>
+                <argument>java</argument>
+                <argument>-out</argument>
+                <argument>${project.build.directory}/generated-sources/thrift</argument>
+                <argument>${basedir}/src/main/thrift/TajoYarnService.thrift</argument>
               </arguments>
             </configuration>
             <goals>
@@ -213,7 +222,7 @@
             </goals>
             <configuration>
               <sources>
-                <source>${project.build.directory}/generated-sources/proto</source>
+                <source>${project.build.directory}/generated-sources/thrift</source>
               </sources>
             </configuration>
           </execution>
