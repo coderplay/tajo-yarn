@@ -25,15 +25,11 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
-import org.apache.hadoop.security.SaslRpcServer;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
@@ -46,13 +42,19 @@ import org.apache.hadoop.yarn.client.api.async.NMClientAsync;
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.hadoop.yarn.ipc.YarnRPC;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
-import org.apache.tajo.yarn.api.TajoYarnProtocol;
+import org.apache.tajo.yarn.thrift.TajoYarnService;
+import org.apache.thrift.TException;
+import org.apache.thrift.TProcessor;
+import org.apache.thrift.server.TNonblockingServer;
+import org.apache.thrift.server.TServer;
+import org.apache.thrift.transport.TNonblockingServerSocket;
+import org.apache.thrift.transport.TTransportException;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -105,9 +107,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * For each allocated container, the <code>ApplicationMaster</code> can then set
  * up the necessary launch context via {@link org.apache.hadoop.yarn.api.records.ContainerLaunchContext} to specify
  * the allocated container id, local resources required by the executable, the
- * environment to be setup for the executable, commands to execute, etc. and
+ * environment to be setup for the executable, commands to run, etc. and
  * submit a {@link org.apache.hadoop.yarn.api.protocolrecords.StartContainerRequest} to the {@link org.apache.hadoop.yarn.api.ContainerManagementProtocol} to
- * launch and execute the defined commands on the given allocated container.
+ * launch and run the defined commands on the given allocated container.
  * </p>
  *
  * <p>
@@ -153,8 +155,6 @@ public class ApplicationMaster {
   // Tracking url to which app master publishes info for clients to monitor
   private String appMasterTrackingUrl = "";
 
-  private int appMasterRpcThreadCount = 4;
-
   // App Master configuration
   // No. of containers to run shell command on
   private int numTotalContainers = 1;
@@ -177,30 +177,8 @@ public class ApplicationMaster {
   // Only request for more if the original requirement changes.
   private AtomicInteger numRequestedContainers = new AtomicInteger();
 
-  // Shell command to be executed
-  private String shellCommand = "";
-  // Args to be passed to the shell command
-  private String shellArgs = "";
-  // Env variables to be setup for the shell command
-  private Map<String, String> shellEnv = new HashMap<String, String>();
-
-  // Location of shell script ( obtained from info set in env )
-  // Shell script path in fs
-  private String shellScriptPath = "";
-  // Timestamp needed for creating a local resource
-  private long shellScriptPathTimestamp = 0;
-  // File length needed for local resource
-  private long shellScriptPathLen = 0;
-
-  // Hardcoded path to shell script in launch container's local env
-  private static final String ExecShellStringPath = "ExecShellScript.sh";
-  private static final String ExecBatScripStringtPath = "ExecBatScript.bat";
-
   // Hardcoded path to custom log_properties
   private static final String log4jPath = "log4j.properties";
-
-  private static final String shellCommandPath = "shellCommands";
-  private static final String shellArgsPath = "shellArgs";
 
   private volatile boolean done;
   private volatile boolean success;
@@ -210,11 +188,15 @@ public class ApplicationMaster {
   // Launch threads
   private List<Thread> launchThreads = new ArrayList<Thread>();
 
-  private final String linux_bash_command = "bash";
-  private final String windows_command = "cmd /c";
+  private TServer server;
 
-  private InetSocketAddress bindAddress;
-  private Server server;
+  class TajoYarnServiceImpl implements TajoYarnService.Iface {
+
+    @Override
+    public void startMaster() throws TException {
+      LOG.info("Starting Tajo Master");
+    }
+  }
 
   /**
    * @param args Command line args
@@ -290,25 +272,8 @@ public class ApplicationMaster {
     Options opts = new Options();
     opts.addOption("app_attempt_id", true,
         "App Attempt ID. Not to be used unless for testing purposes");
-    opts.addOption("shell_env", true,
-        "Environment for shell script. Specified as env_key=env_val pairs");
-    opts.addOption("container_memory", true,
-        "Amount of memory in MB to be requested to run the shell command");
-    opts.addOption("container_vcores", true,
-        "Amount of virtual cores to be requested to run the shell command");
-    opts.addOption("num_containers", true,
-        "No. of containers on which the shell command needs to be executed");
-    opts.addOption("priority", true, "Application Priority. Default 0");
-    opts.addOption("debug", false, "Dump out debug information");
-
     opts.addOption("help", false, "Print usage");
     CommandLine cliParser = new GnuParser().parse(opts, args);
-
-    if (args.length == 0) {
-      printUsage(opts);
-      throw new IllegalArgumentException(
-          "No args specified for application master to initialize");
-    }
 
     //Check whether customer log4j.properties file exists
     if (fileExist(log4jPath)) {
@@ -367,62 +332,6 @@ public class ApplicationMaster {
         + appAttemptID.getApplicationId().getClusterTimestamp()
         + ", attemptId=" + appAttemptID.getAttemptId());
 
-    if (!fileExist(shellCommandPath)
-        && envs.get(DSConstants.DISTRIBUTEDSHELLSCRIPTLOCATION).isEmpty()) {
-      throw new IllegalArgumentException(
-          "No shell command or shell script specified to be executed by application master");
-    }
-
-    if (fileExist(shellCommandPath)) {
-      shellCommand = readContent(shellCommandPath);
-    }
-
-    if (fileExist(shellArgsPath)) {
-      shellArgs = readContent(shellArgsPath);
-    }
-
-    if (cliParser.hasOption("shell_env")) {
-      String shellEnvs[] = cliParser.getOptionValues("shell_env");
-      for (String env : shellEnvs) {
-        env = env.trim();
-        int index = env.indexOf('=');
-        if (index == -1) {
-          shellEnv.put(env, "");
-          continue;
-        }
-        String key = env.substring(0, index);
-        String val = "";
-        if (index < (env.length() - 1)) {
-          val = env.substring(index + 1);
-        }
-        shellEnv.put(key, val);
-      }
-    }
-
-    if (envs.containsKey(DSConstants.DISTRIBUTEDSHELLSCRIPTLOCATION)) {
-      shellScriptPath = envs.get(DSConstants.DISTRIBUTEDSHELLSCRIPTLOCATION);
-
-      if (envs.containsKey(DSConstants.DISTRIBUTEDSHELLSCRIPTTIMESTAMP)) {
-        shellScriptPathTimestamp = Long.valueOf(envs
-            .get(DSConstants.DISTRIBUTEDSHELLSCRIPTTIMESTAMP));
-      }
-      if (envs.containsKey(DSConstants.DISTRIBUTEDSHELLSCRIPTLEN)) {
-        shellScriptPathLen = Long.valueOf(envs
-            .get(DSConstants.DISTRIBUTEDSHELLSCRIPTLEN));
-      }
-
-      if (!shellScriptPath.isEmpty()
-          && (shellScriptPathTimestamp <= 0 || shellScriptPathLen <= 0)) {
-        LOG.error("Illegal values in env for shell script path" + ", path="
-            + shellScriptPath + ", len=" + shellScriptPathLen + ", timestamp="
-            + shellScriptPathTimestamp);
-        throw new IllegalArgumentException(
-            "Illegal values in env for shell script path");
-      }
-    }
-
-    appMasterRpcThreadCount = Integer.parseInt(cliParser.getOptionValue(
-        "appmaster_thread_count", "4"));
     containerMemory = Integer.parseInt(cliParser.getOptionValue(
         "container_memory", "10"));
     containerVirtualCores = Integer.parseInt(cliParser.getOptionValue(
@@ -483,36 +392,21 @@ public class ApplicationMaster {
     nmClientAsync.start();
 
     // Setup local RPC Server to accept status requests directly from clients
-    // TODO need to setup a protocol for client to be able to communicate to
-    // the RPC server
     // TODO use the rpc port info to register with the RM for the client to
     // send requests to this app master
-    YarnRPC rpc = YarnRPC.create(conf);
+    appMasterHostname = InetAddress.getLocalHost().getHostName();
 
-    InetSocketAddress masterServiceAddress = new InetSocketAddress(0);
-
-    Configuration serverConf = conf;
-    // If the auth is not-simple, enforce it to be token-based.
-    serverConf = new Configuration(conf);
-    serverConf.set(
-        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
-        SaslRpcServer.AuthMethod.TOKEN.toString());
-    this.server =
-        rpc.getServer(TajoYarnProtocol.class, this, masterServiceAddress,
-            serverConf, null, appMasterRpcThreadCount);
-
-    // Enable service authorization?
-    if (conf.getBoolean(
-        CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHORIZATION,
-        false)) {
-      refreshServiceAcls(conf, new TajoAMPolicyProvider());
+    TNonblockingServerSocket serverSocket;
+    try {
+      serverSocket = new TNonblockingServerSocket(0);
+      this.appMasterRpcPort  = ThriftHelper.getServerSocketFor(serverSocket).getLocalPort();
+    } catch (TTransportException tte) {
+      LOG.error("Error throws when starting rpc server", tte);
+      throw new IOException(tte);
     }
-
-    this.server.start();
 
     // Register self with ResourceManager
     // This will start heartbeating to the RM
-    appMasterHostname = NetUtils.getHostname();
     RegisterApplicationMasterResponse response = amRMClient
         .registerApplicationMaster(appMasterHostname, appMasterRpcPort,
             appMasterTrackingUrl);
@@ -523,6 +417,12 @@ public class ApplicationMaster {
 
     int maxVCores = response.getMaximumResourceCapability().getVirtualCores();
     LOG.info("Max vcores capabililty of resources in this cluster " + maxVCores);
+
+
+    LOG.info("Starting rpc server listening on " + appMasterHostname + ":" + appMasterRpcPort);
+    TProcessor processor = new TajoYarnService.Processor<TajoYarnService.Iface>(new TajoYarnServiceImpl());
+    this.server = new TNonblockingServer(new TNonblockingServer.Args(serverSocket).processor(processor));
+    this.server.serve();
 
     // A resource ask cannot exceed the max.
     if (containerMemory > maxMem) {
@@ -562,10 +462,6 @@ public class ApplicationMaster {
     return success;
   }
 
-  void refreshServiceAcls(Configuration configuration,
-                          PolicyProvider policyProvider) {
-    this.server.refreshServiceAcl(configuration, policyProvider);
-  }
 
   @VisibleForTesting
   NMCallbackHandler createNMCallbackHandler() {
@@ -797,7 +693,7 @@ public class ApplicationMaster {
 
   /**
    * Thread to connect to the {@link org.apache.hadoop.yarn.api.ContainerManagementProtocol} and launch the container
-   * that will execute the shell command.
+   * that will run the shell command.
    */
   private class LaunchContainerRunnable implements Runnable {
 
@@ -828,57 +724,17 @@ public class ApplicationMaster {
       ContainerLaunchContext ctx = Records
           .newRecord(ContainerLaunchContext.class);
 
-      // Set the environment
-      ctx.setEnvironment(shellEnv);
 
       // Set the local resources
       Map<String, LocalResource> localResources = new HashMap<String, LocalResource>();
 
-      // The container for the eventual shell commands needs its own local
-      // resources too.
-      // In this scenario, if a shell script is specified, we need to have it
-      // copied and made available to the container.
-      if (!shellScriptPath.isEmpty()) {
-        LocalResource shellRsrc = Records.newRecord(LocalResource.class);
-        shellRsrc.setType(LocalResourceType.FILE);
-        shellRsrc.setVisibility(LocalResourceVisibility.APPLICATION);
-        try {
-          shellRsrc.setResource(ConverterUtils.getYarnUrlFromURI(new URI(
-              shellScriptPath)));
-        } catch (URISyntaxException e) {
-          LOG.error("Error when trying to use shell script path specified"
-              + " in env, path=" + shellScriptPath);
-          e.printStackTrace();
-
-          // A failure scenario on bad input such as invalid shell script path
-          // We know we cannot continue launching the container
-          // so we should release it.
-          // TODO
-          numCompletedContainers.incrementAndGet();
-          numFailedContainers.incrementAndGet();
-          return;
-        }
-        shellRsrc.setTimestamp(shellScriptPathTimestamp);
-        shellRsrc.setSize(shellScriptPathLen);
-        localResources.put(Shell.WINDOWS ? ExecBatScripStringtPath :
-            ExecShellStringPath, shellRsrc);
-        shellCommand = Shell.WINDOWS ? windows_command : linux_bash_command;
-      }
       ctx.setLocalResources(localResources);
 
-      // Set the necessary command to execute on the allocated container
+      // Set the necessary command to run on the allocated container
       Vector<CharSequence> vargs = new Vector<CharSequence>(5);
 
       // Set executable command
-      vargs.add(shellCommand);
-      // Set shell script path
-      if (!shellScriptPath.isEmpty()) {
-        vargs.add(Shell.WINDOWS ? ExecBatScripStringtPath
-            : ExecShellStringPath);
-      }
 
-      // Set args for the shell command if any
-      vargs.add(shellArgs);
       // Add log redirect params
       vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout");
       vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr");
@@ -946,7 +802,4 @@ public class ApplicationMaster {
   }
 
 
-  class TajoYarnProtocolHandler implements TajoYarnProtocol {
-
-  }
 }

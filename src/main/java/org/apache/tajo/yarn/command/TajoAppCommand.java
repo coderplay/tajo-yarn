@@ -15,11 +15,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.tajo.yarn.api;
-
-public interface TajoYarnProtocol {
+package org.apache.tajo.yarn.command;
 
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.yarn.client.api.YarnClient;
+
+public abstract class TajoAppCommand implements ClientCommand {
+
+  // Configuration
+  protected Configuration conf;
+  protected YarnClient yarnClient;
+
+  public TajoAppCommand(Configuration conf) {
+    this.conf = conf;
+    yarnClient = YarnClient.createYarnClient();
+    yarnClient.init(conf);
+
+  }
 
 }

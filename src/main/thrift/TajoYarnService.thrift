@@ -16,20 +16,19 @@
  * limitations under the License.
  */
 
-option java_package = "org.apache.tajo.yarn.proto";
-option java_outer_classname = "TajoYarnProtocol";
-option java_generic_services = true;
-option java_generate_equals_and_hash = true;
+namespace java org.apache.tajo.yarn.thrift
 
+service TajoYarnService {
+//  // worker
+//  void addWorker(1: i32 number);
 
-message StartMasterRequestProto {
-}
+  // start/stop nimber
+  void startMaster();
 
-message StartMasterResponseProto {
-}
-
-service TajoYarnProtocolService {
-
-  rpc startMaster(StartMasterRequestProto) returns (StartMasterResponseProto);
-
+//  // enable/disable workers
+//  void startWorkers();
+//  void stopWorkers();
+//
+//  // shutdown tajo cluster
+//  void shutdown();
 }

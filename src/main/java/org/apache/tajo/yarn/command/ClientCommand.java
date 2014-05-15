@@ -16,14 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.tajo.yarn.api;
+package org.apache.tajo.yarn.command;
 
-import org.apache.hadoop.ipc.ProtocolInfo;
-import org.apache.tajo.yarn.proto.TajoYarnProtocol;
 
-@ProtocolInfo(
-    protocolName = "org.apache.tajo.yarn.api.TajoYarnProtocolPB",
-    protocolVersion = 1)
-public interface TajoYarnProtocolPB extends TajoYarnProtocol.TajoYarnProtocolService.BlockingInterface {
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Options;
 
+public interface ClientCommand {
+  /**
+   * @return the options this client will process.
+   */
+  public Options getOpts();
+
+  /**
+   * @return header description for this command
+   */
+  public String getHeaderDescription();
+
+  /**
+   * Do the processing
+   * @param cl the arguments to process
+   * @throws Exception on any error
+   */
+  public void process(CommandLine cl) throws Exception;
 }
+
+
