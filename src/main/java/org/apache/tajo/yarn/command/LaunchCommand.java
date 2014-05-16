@@ -62,9 +62,15 @@ public class LaunchCommand extends TajoCommand {
   // Queue for App master
   private String amQueue = "";
   // Amt. of memory resource to request for to run the App Master
-  private int amMemory = 10;
+  private int amMemory = 2048;
   // Amt. of virtual core resource to request for to run the App Master
-  private int amVCores = 1;
+  private int amVCores = 4;
+
+  private int qmMemory = 512;
+  private int qmVCores = 2;
+
+  private int trMemory = 1024;
+  private int trVCores = 4;
 
   private String confDir = "";
 
@@ -95,29 +101,54 @@ public class LaunchCommand extends TajoCommand {
   @Override
   public Options getOpts() {
     Options opts = new Options();
+    opts.addOption("archive", true, "(Required) File path of tajo-*.tar.gz");
     opts.addOption("appname", true, "Application Name. Default value - Tajo");
     opts.addOption("priority", true, "Application Priority. Default 0");
-    opts.addOption("queue", true, "RM Queue in which this application is to be submitted");
-    opts.addOption("master_memory", true, "Amount of memory in MB to be requested to run the application master");
-    opts.addOption("master_vcores", true, "Amount of virtual cores to be requested to run the application master");
-//    opts.addOption("container_memory", true, "Amount of memory in MB to be requested to run the shell command");
-//    opts.addOption("container_vcores", true, "Amount of virtual cores to be requested to run the shell command");
-    opts.addOption("conf_dir", true, "TAJO_CONF_DIR. Default - tajo-conf");
+    opts.addOption("queue", true,
+        "RM Queue in which this application is to be submitted. Default value - default");
+    opts.addOption("master_memory", true,
+        "Amount of memory in MB to be requested to run the application master and Tajo Master. Default 2048");
+    opts.addOption("master_vcores", true,
+        "Amount of virtual cores to be requested to run the application master and Tajo Master. Default 4");
+    opts.addOption("qm_memory", true,
+        "Amount of memory in MB to be requested to launch a QueryMaster. Default 512");
+    opts.addOption("qm_vcores", true,
+        "Amount of virtual cores to be requested to launch a QueryMaster. Default 2");
+    opts.addOption("tr_memory", true,
+        "Amount of memory in MB to be requested to launch a TaskRunner. Default 1024");
+    opts.addOption("tr_vcores", true,
+        "Amount of virtual cores to be requested to launch a TaskRunner. Default 4");
+    opts.addOption("conf_dir", true,
+        "local dir which will be distributed as Tajo's TAJO_CONF_DIR. Default - tajo-conf");
     opts.addOption("log_properties", true, "log4j.properties file");
-//    opts.addOption("output", true, "Output file");
-//    opts.addOption("tajo-conf", true, "storm.yaml file");
-    opts.addOption("tajo_archive", true, "file path of tajo-*.tar.gz. Default value - tajo-dist/tajo-*.tar.gz");
     return opts;
   }
 
   @Override
   public void process(CommandLine cl) throws Exception {
+    if (!cl.hasOption("archive") || (cl.getOptionValue("archive") == null)) {
+      throw new IllegalArgumentException("-archive is required");
+    }
+
+    tajoArchive = cl.getOptionValue("archive");
     appName = cl.getOptionValue("appname", "Tajo");
     amPriority = Integer.parseInt(cl.getOptionValue("priority", "0"));
     amQueue = cl.getOptionValue("queue", "default");
     amMemory = Integer.parseInt(cl.getOptionValue("master_memory", "2048"));
     amVCores = Integer.parseInt(cl.getOptionValue("master_vcores", "4"));
+    qmMemory = Integer.parseInt(cl.getOptionValue("qm_memory", "512"));
+    qmVCores = Integer.parseInt(cl.getOptionValue("qm_vcores", "2"));
+    trMemory = Integer.parseInt(cl.getOptionValue("tr_memory", "1024"));
+    trVCores = Integer.parseInt(cl.getOptionValue("tr_vcores", "4"));
+    confDir = cl.getOptionValue("conf_dir", "tajo-conf");
+    log4jPropFile = cl.getOptionValue("log_properties", "");
 
+    validateOptions();
+
+    launch();
+  }
+
+  private void validateOptions() throws IllegalArgumentException {
     if (amMemory < 0) {
       throw new IllegalArgumentException("Invalid memory specified for application master, exiting."
           + " Specified memory=" + amMemory);
@@ -126,104 +157,94 @@ public class LaunchCommand extends TajoCommand {
       throw new IllegalArgumentException("Invalid virtual cores specified for application master, exiting."
           + " Specified virtual cores=" + amVCores);
     }
-
-    tajoArchive = cl.getOptionValue("tajo_archive", "tajo-dist/tajo-*.tar.gz");
-
-    confDir = cl.getOptionValue("conf_dir", "tajo-conf");
-
-    log4jPropFile = cl.getOptionValue("log_properties", "");
-
-    launch();
-  }
-
-
-  /**
-   * Find a jar that contains a class of the same name, if any.
-   * It will return a jar file, even if that is not the first thing
-   * on the class path that has a class with the same name.
-   *
-   * @param clazz the class to find.
-   * @return a jar file that contains the class, or null.
-   * @throws IOException on any error
-   */
-  public static String findContainingJar(Class<?> clazz) throws IOException {
-    ClassLoader loader = clazz.getClassLoader();
-    String classFile = clazz.getName().replaceAll("\\.", "/") + ".class";
-    for(Enumeration<URL> itr = loader.getResources(classFile);
-        itr.hasMoreElements();) {
-      URL url = itr.nextElement();
-      if ("jar".equals(url.getProtocol())) {
-        String toReturn = url.getPath();
-        if (toReturn.startsWith("file:")) {
-          toReturn = toReturn.substring("file:".length());
-        }
-        // URLDecoder is a misnamed class, since it actually decodes
-        // x-www-form-urlencoded MIME type rather than actual
-        // URL encoding (which the file path has). Therefore it would
-        // decode +s to ' 's which is incorrect (spaces are actually
-        // either unencoded or encoded as "%20"). Replace +s first, so
-        // that they are kept sacred during the decoding process.
-        toReturn = toReturn.replaceAll("\\+", "%2B");
-        toReturn = URLDecoder.decode(toReturn, "UTF-8");
-        return toReturn.replaceAll("!.*$", "");
-      }
+    if (qmMemory < 0) {
+      throw new IllegalArgumentException("Invalid memory specified for QueryMaster, exiting."
+          + " Specified memory=" + qmMemory);
     }
-
-    throw new IOException("Fail to locat a JAR for class: " + clazz.getName());
+    if (qmVCores < 0) {
+      throw new IllegalArgumentException("Invalid virtual cores specified for QueryMaster, exiting."
+          + " Specified virtual cores=" + qmVCores);
+    }
+    if (trMemory < 0) {
+      throw new IllegalArgumentException("Invalid memory specified for TaskRunner, exiting."
+          + " Specified memory=" + trMemory);
+    }
+    if (trVCores < 0) {
+      throw new IllegalArgumentException("Invalid virtual cores specified for TaskRunner, exiting."
+          + " Specified virtual cores=" + trVCores);
+    }
   }
-
 
   /**
    * Main run function for launch this application
+   *
    * @return true if application completed successfully
    * @throws java.io.IOException
    * @throws org.apache.hadoop.yarn.exceptions.YarnException
    */
-
   private void launch() throws IOException, YarnException {
     LOG.info("Running Client");
     yarnClient.start();
 
-    YarnClusterMetrics clusterMetrics = yarnClient.getYarnClusterMetrics();
-    LOG.info("Got Cluster metric info from ASM"
-        + ", numNodeManagers=" + clusterMetrics.getNumNodeManagers());
-
-    List<NodeReport> clusterNodeReports = yarnClient.getNodeReports(
-        NodeState.RUNNING);
-    LOG.info("Got Cluster node info from ASM");
-    for (NodeReport node : clusterNodeReports) {
-      LOG.info("Got node report from ASM for"
-          + ", nodeId=" + node.getNodeId()
-          + ", nodeAddress" + node.getHttpAddress()
-          + ", nodeRackName" + node.getRackName()
-          + ", nodeNumContainers" + node.getNumContainers());
-    }
-
-    QueueInfo queueInfo = yarnClient.getQueueInfo(this.amQueue);
-    LOG.info("Queue info"
-        + ", queueName=" + queueInfo.getQueueName()
-        + ", queueCurrentCapacity=" + queueInfo.getCurrentCapacity()
-        + ", queueMaxCapacity=" + queueInfo.getMaximumCapacity()
-        + ", queueApplicationCount=" + queueInfo.getApplications().size()
-        + ", queueChildQueueCount=" + queueInfo.getChildQueues().size());
-
-    List<QueueUserACLInfo> listAclInfo = yarnClient.getQueueAclsInfo();
-    for (QueueUserACLInfo aclInfo : listAclInfo) {
-      for (QueueACL userAcl : aclInfo.getUserAcls()) {
-        LOG.info("User ACL Info for Queue"
-            + ", queueName=" + aclInfo.getQueueName()
-            + ", userAcl=" + userAcl.name());
-      }
-    }
+    displayClusterSummary();
 
     // Get a new application id
     YarnClientApplication app = yarnClient.createApplication();
+
+    // validate resource capacity for launch an application amster
+    validateResourceForAM(app);
+
+    // set the application name
+    ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
+    appContext.setApplicationName(appName);
+
+    // Set up the container launch context for the application master
+    setupAMContainerLaunchContext(appContext);
+
+    // Set up resource type requirements
+    // For now, both memory and vcores are supported, so we set memory and
+    // vcores requirements
+    Resource capability = Records.newRecord(Resource.class);
+    capability.setMemory(amMemory);
+    capability.setVirtualCores(amVCores);
+    appContext.setResource(capability);
+
+    // Set the priority for the application master
+    Priority pri = Records.newRecord(Priority.class);
+    // TODO - what is the range for priority? how to decide?
+    pri.setPriority(amPriority);
+    appContext.setPriority(pri);
+
+    // Set the queue to which this application is to be submitted in the RM
+    appContext.setQueue(amQueue);
+
+    // Submit the application to the applications manager
+    // SubmitApplicationResponse submitResp = applicationsManager.submitApplication(appRequest);
+    // Ignore the response as either a valid response object is returned on success
+    // or an exception thrown to denote some form of a failure
+    LOG.info("Submitting application to ASM");
+
+    yarnClient.submitApplication(appContext);
+
+    // TODO
+    // Try submitting the same request again
+    // app submission failure?
+
+    // Monitor the application
+    // return monitorApplication(appId);
+
+  }
+
+  /**
+   * If we do not have min/max, we may not be able to correctly request
+   * the required resources from the RM for the app master
+   * Memory ask has to be a multiple of min and less than max.
+   * Dump out information about cluster capability as seen by the resource manager
+   * @param app
+   */
+  private void validateResourceForAM(YarnClientApplication app) {
     GetNewApplicationResponse appResponse = app.getNewApplicationResponse();
     // TODO get min/max resource capabilities from RM and change memory ask if needed
-    // If we do not have min/max, we may not be able to correctly request
-    // the required resources from the RM for the app master
-    // Memory ask has to be a multiple of min and less than max.
-    // Dump out information about cluster capability as seen by the resource manager
     int maxMem = appResponse.getMaximumResourceCapability().getMemory();
     LOG.info("Max mem capabililty of resources in this cluster " + maxMem);
 
@@ -244,15 +265,66 @@ public class LaunchCommand extends TajoCommand {
           + ", max=" + maxVCores);
       amVCores = maxVCores;
     }
+  }
 
-    // set the application name
-    ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
+  private void setupAMContainerLaunchContext(ApplicationSubmissionContext appContext) throws IOException {
     ApplicationId appId = appContext.getApplicationId();
-    appContext.setApplicationName(appName);
-
-    // Set up the container launch context for the application master
     ContainerLaunchContext amContainer = Records.newRecord(ContainerLaunchContext.class);
+    FileSystem fs = FileSystem.get(conf);
+    // Set local resource info into app master container launch context
+    setupLocalResources(amContainer, fs, appId);
 
+    // Set the necessary security tokens as needed
+    //amContainer.setContainerTokens(containerToken);
+
+    // Set the env variables to be setup in the env where the application master will be run
+    setupEnv(amContainer);
+
+    // Set the necessary command to run the application master
+    setupAMCommand(amContainer);
+
+    // Service data is a binary blob that can be passed to the application
+    // Not needed in this scenario
+    // amContainer.setServiceData(serviceData);
+
+    // Setup security tokens
+    setupSecurityTokens(amContainer, fs);
+
+    appContext.setAMContainerSpec(amContainer);
+  }
+
+  private void setupAMCommand(ContainerLaunchContext amContainer) {
+    Vector<CharSequence> vargs = new Vector<CharSequence>(30);
+
+    // Set java executable command
+    LOG.info("Setting up app master command");
+    vargs.add(Environment.JAVA_HOME.$() + "/bin/java");
+    // Set Xmx based on am memory size
+    vargs.add("-Xmx32m");
+    // Set class name
+    vargs.add(ApplicationMaster.class.getName());
+    if (debugFlag) {
+      vargs.add("--debug");
+    }
+
+    vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout");
+    vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr");
+
+    // Get final commmand
+    StringBuilder command = new StringBuilder();
+    for (CharSequence str : vargs) {
+      command.append(str).append(" ");
+    }
+
+    LOG.info("Completed setting up app master command " + command.toString());
+    List<String> commands = new ArrayList<String>();
+    commands.add(command.toString());
+    amContainer.setCommands(commands);
+  }
+
+  private void setupLocalResources(ContainerLaunchContext amContainer, FileSystem fs,
+                                   ApplicationId appId)
+      throws IOException {
     // set local resources for the application master
     // local files or archives as needed
     // In this scenario, the jar file for the application master is part of the local resources
@@ -261,7 +333,7 @@ public class LaunchCommand extends TajoCommand {
     LOG.info("Copy App Master jar from local filesystem and add to local environment");
     // Copy the application master jar to the filesystem
     // Create a local resource to point to the destination jar path
-    FileSystem fs = FileSystem.get(conf);
+
     String appMasterJar = findContainingJar(ApplicationMaster.class);
     addToLocalResources(fs, appMasterJar, appMasterJarPath, appId.getId(),
         localResources, LocalResourceType.FILE);
@@ -281,17 +353,12 @@ public class LaunchCommand extends TajoCommand {
           localResources, LocalResourceType.FILE);
     }
 
-    // Set local resource info into app master container launch context
     amContainer.setLocalResources(localResources);
+  }
 
-    // Set the necessary security tokens as needed
-    //amContainer.setContainerTokens(containerToken);
-
-    // Set the env variables to be setup in the env where the application master will be run
+  private void setupEnv(ContainerLaunchContext amContainer) throws IOException {
     LOG.info("Set the environment for the application master");
     Map<String, String> env = new HashMap<String, String>();
-
-//    env.put(Constants.DISTRIBUTEDSHELLSCRIPTLEN, Long.toString(hdfsShellScriptLen));
 
     // Add AppMaster.jar location to classpath
     // At some point we should not be required to add
@@ -324,48 +391,9 @@ public class LaunchCommand extends TajoCommand {
     env.put(Constants.TAJO_LOG_DIR, ApplicationConstants.LOG_DIR_EXPANSION_VAR);
     env.put(Constants.TAJO_CLASSPATH, "/export/apps/hadoop/site/lib/*");
     amContainer.setEnvironment(env);
+  }
 
-    // Set the necessary command to run the application master
-    Vector<CharSequence> vargs = new Vector<CharSequence>(30);
-
-    // Set java executable command
-    LOG.info("Setting up app master command");
-    vargs.add(ApplicationConstants.Environment.JAVA_HOME.$() + "/bin/java");
-    // Set Xmx based on am memory size
-    vargs.add("-Xmx32m");
-    // Set class name
-    vargs.add(ApplicationMaster.class.getName());
-    if (debugFlag) {
-      vargs.add("--debug");
-    }
-
-    vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout");
-    vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr");
-
-    // Get final commmand
-    StringBuilder command = new StringBuilder();
-    for (CharSequence str : vargs) {
-      command.append(str).append(" ");
-    }
-
-    LOG.info("Completed setting up app master command " + command.toString());
-    List<String> commands = new ArrayList<String>();
-    commands.add(command.toString());
-    amContainer.setCommands(commands);
-
-    // Set up resource type requirements
-    // For now, both memory and vcores are supported, so we set memory and
-    // vcores requirements
-    Resource capability = Records.newRecord(Resource.class);
-    capability.setMemory(amMemory);
-    capability.setVirtualCores(amVCores);
-    appContext.setResource(capability);
-
-    // Service data is a binary blob that can be passed to the application
-    // Not needed in this scenario
-    // amContainer.setServiceData(serviceData);
-
-    // Setup security tokens
+  private void setupSecurityTokens(ContainerLaunchContext amContainer, FileSystem fs) throws IOException {
     if (UserGroupInformation.isSecurityEnabled()) {
       Credentials credentials = new Credentials();
       String tokenRenewer = conf.get(YarnConfiguration.RM_PRINCIPAL);
@@ -387,33 +415,76 @@ public class LaunchCommand extends TajoCommand {
       ByteBuffer fsTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
       amContainer.setTokens(fsTokens);
     }
+  }
 
-    appContext.setAMContainerSpec(amContainer);
+  private void displayClusterSummary() throws YarnException, IOException {
+    YarnClusterMetrics clusterMetrics = yarnClient.getYarnClusterMetrics();
+    LOG.info("Got Cluster metric info from ASM"
+        + ", numNodeManagers=" + clusterMetrics.getNumNodeManagers());
 
-    // Set the priority for the application master
-    Priority pri = Records.newRecord(Priority.class);
-    // TODO - what is the range for priority? how to decide?
-    pri.setPriority(amPriority);
-    appContext.setPriority(pri);
+    List<NodeReport> clusterNodeReports = yarnClient.getNodeReports(
+        NodeState.RUNNING);
+    LOG.info("Got Cluster node info from ASM");
+    for (NodeReport node : clusterNodeReports) {
+      LOG.info("Got node report from ASM for"
+          + ", nodeId=" + node.getNodeId()
+          + ", nodeAddress" + node.getHttpAddress()
+          + ", nodeRackName" + node.getRackName()
+          + ", nodeNumContainers" + node.getNumContainers());
+    }
 
-    // Set the queue to which this application is to be submitted in the RM
-    appContext.setQueue(amQueue);
+    QueueInfo queueInfo = yarnClient.getQueueInfo(this.amQueue);
+    LOG.info("Queue info"
+        + ", queueName=" + queueInfo.getQueueName()
+        + ", queueCurrentCapacity=" + queueInfo.getCurrentCapacity()
+        + ", queueMaxCapacity=" + queueInfo.getMaximumCapacity()
+        + ", queueApplicationCount=" + queueInfo.getApplications().size()
+        + ", queueChildQueueCount=" + queueInfo.getChildQueues().size());
 
-    // Submit the application to the applications manager
-    // SubmitApplicationResponse submitResp = applicationsManager.submitApplication(appRequest);
-    // Ignore the response as either a valid response object is returned on success
-    // or an exception thrown to denote some form of a failure
-    LOG.info("Submitting application to ASM");
+    List<QueueUserACLInfo> listAclInfo = yarnClient.getQueueAclsInfo();
+    for (QueueUserACLInfo aclInfo : listAclInfo) {
+      for (QueueACL userAcl : aclInfo.getUserAcls()) {
+        LOG.info("User ACL Info for Queue"
+            + ", queueName=" + aclInfo.getQueueName()
+            + ", userAcl=" + userAcl.name());
+      }
+    }
+  }
 
-    yarnClient.submitApplication(appContext);
 
-    // TODO
-    // Try submitting the same request again
-    // app submission failure?
+  /**
+   * Find a jar that contains a class of the same name, if any.
+   * It will return a jar file, even if that is not the first thing
+   * on the class path that has a class with the same name.
+   *
+   * @param clazz the class to find.
+   * @return a jar file that contains the class, or null.
+   * @throws IOException on any error
+   */
+  private static String findContainingJar(Class<?> clazz) throws IOException {
+    ClassLoader loader = clazz.getClassLoader();
+    String classFile = clazz.getName().replaceAll("\\.", "/") + ".class";
+    for (Enumeration<URL> itr = loader.getResources(classFile);
+         itr.hasMoreElements(); ) {
+      URL url = itr.nextElement();
+      if ("jar".equals(url.getProtocol())) {
+        String toReturn = url.getPath();
+        if (toReturn.startsWith("file:")) {
+          toReturn = toReturn.substring("file:".length());
+        }
+        // URLDecoder is a misnamed class, since it actually decodes
+        // x-www-form-urlencoded MIME type rather than actual
+        // URL encoding (which the file path has). Therefore it would
+        // decode +s to ' 's which is incorrect (spaces are actually
+        // either unencoded or encoded as "%20"). Replace +s first, so
+        // that they are kept sacred during the decoding process.
+        toReturn = toReturn.replaceAll("\\+", "%2B");
+        toReturn = URLDecoder.decode(toReturn, "UTF-8");
+        return toReturn.replaceAll("!.*$", "");
+      }
+    }
 
-    // Monitor the application
-    // return monitorApplication(appId);
-
+    throw new IOException("Fail to locat a JAR for class: " + clazz.getName());
   }
 
   private void addToLocalResources(FileSystem fs,

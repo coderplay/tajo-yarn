@@ -31,7 +31,6 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Shell;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
@@ -47,7 +46,6 @@ import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.hadoop.yarn.util.StringHelper;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
-import org.apache.thrift.TException;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.server.TNonblockingServer;
 import org.apache.thrift.server.TServer;
@@ -265,7 +263,7 @@ public class ApplicationMaster {
     opts.addOption("help", false, "Print usage");
     CommandLine cliParser = new GnuParser().parse(opts, args);
 
-    //Check whether customer log4j.properties file exists
+    // Check whether customer log4j.properties file exists
     if (fileExist(log4jPath)) {
       try {
         Log4jPropertyHelper.updateLog4jConfiguration(ApplicationMaster.class,
@@ -382,7 +380,7 @@ public class ApplicationMaster {
     nmClientAsync.start();
 
     try {
-      startMaster();
+      startTajoMaster();
     } catch (Exception e) {
       LOG.warn("Caught an Exception:", e);
       // return false;
@@ -799,7 +797,7 @@ public class ApplicationMaster {
     }
   }
 
-  public void startMaster() throws Exception {
+  public void startTajoMaster() throws Exception {
     LOG.info("Current working dir:"  + System.getProperty("user.dir"));
     String tajoHome = System.getenv("TAJO_HOME");
     List<String> script = new ArrayList<String>();
