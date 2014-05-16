@@ -57,7 +57,11 @@
     </fileSet>
     <fileSet>
       <directory>${project.basedir}/tajo-dist</directory>
-      <outputDirectory>tajo</outputDirectory>
+      <outputDirectory>tajo-dist</outputDirectory>
+    </fileSet>
+    <fileSet>
+      <directory>${project.basedir}/tajo-conf</directory>
+      <outputDirectory>tajo-conf</outputDirectory>
     </fileSet>
   </fileSets>
 </assembly>

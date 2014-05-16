@@ -19,15 +19,14 @@ package org.apache.tajo.yarn.command;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
-import org.apache.commons.io.IOUtils;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -42,13 +41,16 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.tajo.yarn.ApplicationMaster;
+import org.apache.tajo.yarn.Constants;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class LaunchCommand extends TajoAppCommand {
   private static final Log LOG = LogFactory.getLog(LaunchCommand.class);
@@ -64,22 +66,20 @@ public class LaunchCommand extends TajoAppCommand {
   // Amt. of virtual core resource to request for to run the App Master
   private int amVCores = 1;
 
-  private String tarBallPath = "";
+  private String confDir = "";
+
+  private String tajoArchive = "";
 
   // log4j.properties file
   // if available, add to local resources and set into classpath
   private String log4jPropFile = "";
 
-  // Start time for client
-  private final long clientStartTime = System.currentTimeMillis();
-  // Timeout threshold for client. Kill app after time interval expires.
-  private long clientTimeout = 600000;
-
   // Debug flag
   boolean debugFlag = false;
 
-
   private static final String appMasterJarPath = "AppMaster.jar";
+  // Directory where jars in
+  private static final String libDir = "lib";
   // Hardcoded path to custom log_properties
   private static final String log4jPath = "log4j.properties";
 
@@ -102,10 +102,11 @@ public class LaunchCommand extends TajoAppCommand {
     opts.addOption("master_vcores", true, "Amount of virtual cores to be requested to run the application master");
 //    opts.addOption("container_memory", true, "Amount of memory in MB to be requested to run the shell command");
 //    opts.addOption("container_vcores", true, "Amount of virtual cores to be requested to run the shell command");
+    opts.addOption("conf_dir", true, "TAJO_CONF_DIR. Default - tajo-conf");
     opts.addOption("log_properties", true, "log4j.properties file");
 //    opts.addOption("output", true, "Output file");
 //    opts.addOption("tajo-conf", true, "storm.yaml file");
-    opts.addOption("tar", true, "file path of tajo-*.tar.gz");
+    opts.addOption("tajo_archive", true, "file path of tajo-*.tar.gz. Default value - tajo-dist/tajo-*.tar.gz");
     return opts;
   }
 
@@ -114,8 +115,8 @@ public class LaunchCommand extends TajoAppCommand {
     appName = cl.getOptionValue("appname", "Tajo");
     amPriority = Integer.parseInt(cl.getOptionValue("priority", "0"));
     amQueue = cl.getOptionValue("queue", "default");
-    amMemory = Integer.parseInt(cl.getOptionValue("master_memory", "10"));
-    amVCores = Integer.parseInt(cl.getOptionValue("master_vcores", "1"));
+    amMemory = Integer.parseInt(cl.getOptionValue("master_memory", "2048"));
+    amVCores = Integer.parseInt(cl.getOptionValue("master_vcores", "4"));
 
     if (amMemory < 0) {
       throw new IllegalArgumentException("Invalid memory specified for application master, exiting."
@@ -126,7 +127,9 @@ public class LaunchCommand extends TajoAppCommand {
           + " Specified virtual cores=" + amVCores);
     }
 
-    tarBallPath = cl.getOptionValue("tar");
+    tajoArchive = cl.getOptionValue("tajo_archive", "tajo-dist/tajo-*.tar.gz");
+
+    confDir = cl.getOptionValue("conf_dir", "tajo-conf");
 
     log4jPropFile = cl.getOptionValue("log_properties", "");
 
@@ -261,21 +264,22 @@ public class LaunchCommand extends TajoAppCommand {
     FileSystem fs = FileSystem.get(conf);
     String appMasterJar = findContainingJar(ApplicationMaster.class);
     addToLocalResources(fs, appMasterJar, appMasterJarPath, appId.getId(),
-        localResources, null);
+        localResources, LocalResourceType.FILE);
 
+    addToLocalResources(fs, libDir, libDir, appId.getId(),
+        localResources, LocalResourceType.FILE);
 
-    File libDir = new File("lib");
-    for (String jar : libDir.list()) {
-      addToLocalResources(fs, libDir + "/" + jar,
-          jar, appId.getId(), localResources, null);
-    }
+    addToLocalResources(fs, tajoArchive, "tajo", appId.getId(),
+        localResources, LocalResourceType.ARCHIVE);
+
+    addToLocalResources(fs, confDir, "conf", appId.getId(),
+        localResources, LocalResourceType.FILE);
 
     // Set the log4j properties if needed
     if (!log4jPropFile.isEmpty()) {
       addToLocalResources(fs, log4jPropFile, log4jPath, appId.getId(),
-          localResources, null);
+          localResources, LocalResourceType.FILE);
     }
-
 
     // Set local resource info into app master container launch context
     amContainer.setLocalResources(localResources);
@@ -287,7 +291,7 @@ public class LaunchCommand extends TajoAppCommand {
     LOG.info("Set the environment for the application master");
     Map<String, String> env = new HashMap<String, String>();
 
-//    env.put(DSConstants.DISTRIBUTEDSHELLSCRIPTLEN, Long.toString(hdfsShellScriptLen));
+//    env.put(Constants.DISTRIBUTEDSHELLSCRIPTLEN, Long.toString(hdfsShellScriptLen));
 
     // Add AppMaster.jar location to classpath
     // At some point we should not be required to add
@@ -303,9 +307,9 @@ public class LaunchCommand extends TajoAppCommand {
       classPathEnv.append(File.pathSeparatorChar);
       classPathEnv.append(c.trim());
     }
-    for (String jar: libDir.list()) {
-      classPathEnv.append(File.pathSeparatorChar).append(jar);
-    }
+
+    classPathEnv.append(File.pathSeparatorChar).append("./").append(libDir).append("/*");
+
     classPathEnv.append(File.pathSeparatorChar).append("./log4j.properties");
 
     // add the runtime classpath needed for tests to work
@@ -315,7 +319,10 @@ public class LaunchCommand extends TajoAppCommand {
     }
 
     env.put("CLASSPATH", classPathEnv.toString());
-
+    env.put(Constants.TAJO_HOME, "$PWD/tajo/" + getTajoHomeInArchive(tajoArchive));
+    env.put(Constants.TAJO_CONF_DIR, "$PWD/conf");
+    env.put(Constants.TAJO_LOG_DIR, ApplicationConstants.LOG_DIR_EXPANSION_VAR);
+    env.put(Constants.TAJO_CLASSPATH, "/export/apps/hadoop/site/lib/*");
     amContainer.setEnvironment(env);
 
     // Set the necessary command to run the application master
@@ -325,7 +332,7 @@ public class LaunchCommand extends TajoAppCommand {
     LOG.info("Setting up app master command");
     vargs.add(ApplicationConstants.Environment.JAVA_HOME.$() + "/bin/java");
     // Set Xmx based on am memory size
-    vargs.add("-Xmx" + amMemory + "m");
+    vargs.add("-Xmx32m");
     // Set class name
     vargs.add(ApplicationMaster.class.getName());
     if (debugFlag) {
@@ -409,50 +416,77 @@ public class LaunchCommand extends TajoAppCommand {
 
   }
 
-  /**
-   * Kill a submitted application by sending a call to the ASM
-   * @param appId Application Id to be killed.
-   * @throws org.apache.hadoop.yarn.exceptions.YarnException
-   * @throws java.io.IOException
-   */
-  private void forceKillApplication(ApplicationId appId)
-      throws YarnException, IOException {
-    // TODO clarify whether multiple jobs with the same app id can be submitted and be running at
-    // the same time.
-    // If yes, can we kill a particular attempt only?
-
-    // Response can be ignored as it is non-null on success or
-    // throws an exception in case of failures
-    yarnClient.killApplication(appId);
-  }
-
-  private void addToLocalResources(FileSystem fs, String fileSrcPath,
-                                   String fileDstPath, int appId, Map<String, LocalResource> localResources,
-                                   String resources) throws IOException {
-    LOG.info("adding resource: " + fileSrcPath + " to: " + fileDstPath);
+  private void addToLocalResources(FileSystem fs,
+                                   String fileSrcPath,
+                                   String fileDstPath,
+                                   int appId,
+                                   Map<String, LocalResource> localResources,
+                                   LocalResourceType type) throws IOException {
     String suffix =
-        appName + "/" + appId + "/" + fileDstPath;
+        appName + "/" + appId + "/" + fileSrcPath;
     Path dst =
         new Path(fs.getHomeDirectory(), suffix);
-    if (fileSrcPath == null) {
-      FSDataOutputStream ostream = null;
-      try {
-        ostream = FileSystem
-            .create(fs, dst, new FsPermission((short) 0710));
-        ostream.writeUTF(resources);
-      } finally {
-        IOUtils.closeQuietly(ostream);
-      }
-    } else {
-      fs.copyFromLocalFile(new Path(fileSrcPath), dst);
-    }
+    fs.copyFromLocalFile(new Path(fileSrcPath), dst);
     FileStatus scFileStatus = fs.getFileStatus(dst);
     LocalResource scRsrc =
         LocalResource.newInstance(
             ConverterUtils.getYarnUrlFromURI(dst.toUri()),
-            LocalResourceType.FILE, LocalResourceVisibility.APPLICATION,
+            type, LocalResourceVisibility.APPLICATION,
             scFileStatus.getLen(), scFileStatus.getModificationTime());
     localResources.put(fileDstPath, scRsrc);
+  }
+
+  private String getTajoHomeInArchive(String archiveName) throws IOException {
+    String lower = archiveName.toLowerCase();
+    if (lower.endsWith(".zip")) {
+      return getTajoHomeInZip(archiveName);
+    } else if (lower.endsWith(".tar.gz") ||
+        lower.endsWith(".tgz")) {
+      return getTajoHomeInTar(archiveName);
+    }
+    throw new IOException("Unable to get tajo home dir from " + archiveName);
+  }
+
+  private String getTajoHomeInZip(String zip) throws IOException {
+    ZipInputStream inputStream = null;
+    try {
+      inputStream = new ZipInputStream(new FileInputStream(zip));
+      for (ZipEntry entry = inputStream.getNextEntry(); entry != null; ) {
+        String entryName = entry.getName();
+        if (entry.isDirectory() && entryName.startsWith("tajo-")) {
+          return entryName.substring(0, entryName.length() - 1);
+        }
+        entry = inputStream.getNextEntry();
+      }
+    } finally {
+      if (inputStream != null) {
+        inputStream.close();
+      }
+    }
+
+    throw new IOException("Unable to get tajo home dir from " + zip);
+  }
+
+  private String getTajoHomeInTar(String tar) throws IOException {
+    TarArchiveInputStream inputStream = null;
+    try {
+      inputStream =
+          new TarArchiveInputStream(new GZIPInputStream(
+              new FileInputStream(tar)));
+      for (TarArchiveEntry entry = inputStream.getNextTarEntry(); entry != null; ) {
+        String entryName = entry.getName();
+        if (entry.isDirectory() && entryName.startsWith("tajo-")) {
+          return entryName.substring(0, entryName.length() - 1);
+        }
+        entry = inputStream.getNextTarEntry();
+      }
+    } finally {
+      if (inputStream != null) {
+        inputStream.close();
+      }
+    }
+
+    throw new IOException("Unable to get tajo home dir from " + tar);
   }
 
 }

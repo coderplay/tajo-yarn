@@ -27,11 +27,11 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Shell;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
@@ -45,6 +45,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
+import org.apache.hadoop.yarn.util.StringHelper;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 import org.apache.thrift.TException;
 import org.apache.thrift.TProcessor;
@@ -55,9 +56,6 @@ import org.apache.thrift.transport.TTransportException;
 
 import java.io.*;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -391,6 +389,13 @@ public class ApplicationMaster {
     nmClientAsync.init(conf);
     nmClientAsync.start();
 
+    try {
+      startMaster();
+    } catch (Exception e) {
+      LOG.warn("Caught an Exception:", e);
+      // return false;
+    }
+
     // Setup local RPC Server to accept status requests directly from clients
     // TODO use the rpc port info to register with the RM for the client to
     // send requests to this app master
@@ -405,6 +410,7 @@ public class ApplicationMaster {
       throw new IOException(tte);
     }
 
+    appMasterTrackingUrl = StringHelper.join("http://", appMasterHostname, ":26080");
     // Register self with ResourceManager
     // This will start heartbeating to the RM
     RegisterApplicationMasterResponse response = amRMClient
@@ -798,6 +804,23 @@ public class ApplicationMaster {
       return ds.readUTF();
     } finally {
       org.apache.commons.io.IOUtils.closeQuietly(ds);
+    }
+  }
+
+  public void startMaster() throws Exception {
+    LOG.info("Current working dir:"  + System.getProperty("user.dir"));
+    String tajoHome = System.getenv("TAJO_HOME");
+    List<String> script = new ArrayList<String>();
+    script.add("bin/tajo-daemon.sh");
+    script.add("start");
+    script.add("master");
+    Shell.ShellCommandExecutor shell = new Shell.ShellCommandExecutor(
+        script.toArray(new String[script.size()]), new File(tajoHome));
+    try {
+      shell.execute();
+      LOG.info(shell.getOutput());
+    } catch (Shell.ExitCodeException e) {
+      LOG.warn(shell.getOutput());
     }
   }
 
