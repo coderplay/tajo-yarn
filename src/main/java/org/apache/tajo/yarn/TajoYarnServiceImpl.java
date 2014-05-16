@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,21 +16,36 @@
  * limitations under the License.
  */
 
-namespace java org.apache.tajo.yarn.thrift
+package org.apache.tajo.yarn;
 
-service TajoYarnService {
-  // add a number of querymasters to the cluster
-  void addQuerMaster(1: i32 number);
+import org.apache.tajo.yarn.thrift.TajoYarnService;
+import org.apache.thrift.TException;
 
-  // decomission a number of queryMasters from the cluster
-  void removeQueryMaster(1: i32 number);
+public class TajoYarnServiceImpl implements TajoYarnService.Iface {
 
-  // add a number of taskrunners to the cluster
-  void addTaskRunners(1: i32 number);
 
-  // decomission a number of taskrunners from the cluster
-  void removeTaskRunners(1: i32 number);
+  @Override
+  public void addQuerMaster(int number) throws TException {
 
-  // shutdown the cluster
-  void shutdown();
+  }
+
+  @Override
+  public void removeQueryMaster(int number) throws TException {
+
+  }
+
+  @Override
+  public void addTaskRunners(int number) throws TException {
+
+  }
+
+  @Override
+  public void removeTaskRunners(int number) throws TException {
+
+  }
+
+  @Override
+  public void shutdown() throws TException {
+
+  }
 }

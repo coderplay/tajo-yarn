@@ -18,51 +18,46 @@
 
 package org.apache.tajo.yarn.command;
 
+
 import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
+import org.apache.hadoop.conf.Configuration;
 
-import java.util.Collection;
-import java.util.HashMap;
+public class TaskRunnerOpCommand extends TajoCommand {
+  private boolean add = false;
 
-public class HelpCommand implements Command {
-  HashMap<String, Command> commands;
-
-  public HelpCommand(HashMap<String, Command> commands) {
-    this.commands = commands;
-  }
-
-  @Override
-  public Options getOpts() {
-    return new Options();
+  public TaskRunnerOpCommand(Configuration conf) {
+    super(conf);
   }
 
   @Override
   public String getHeaderDescription() {
-    return "tajo-yarn help";
+    return "tajo-yarn tr";
   }
 
-  @SuppressWarnings("unchecked")
+  @Override
+  public Options getOpts() {
+    Options opts = super.getOpts();
+    opts.addOption("add", false, "add a number of querymasters to the cluster");
+    opts.addOption("remove", false, "decomission a number of queryMasters from the cluster");
+    opts.addOption("num", false, "number of query masters to be added/decommissioned");
+    return opts;
+  }
+
+
   @Override
   public void process(CommandLine cl) throws Exception {
-    printHelpFor(cl.getArgList());
-  }
+    super.process(cl);
+    if((!cl.hasOption("add")) && (!cl.hasOption("remove"))) {
+      throw new IllegalArgumentException(
+          "You need to specify at least one of two options: -add or -remove");
+    }
 
-  public void printHelpFor(Collection<String> args) {
-    if (args == null || args.size() < 1) {
-      args = commands.keySet();
+    if(!cl.hasOption("num")) {
+      throw new IllegalArgumentException(
+          "number of task runners to be operated is required");
     }
-    HelpFormatter f = new HelpFormatter();
-    for (String command : args) {
-      Command c = commands.get(command);
-      if (c != null) {
-        //TODO Show any arguments to the commands.
-        f.printHelp(command, c.getHeaderDescription(), c.getOpts(), null);
-      } else {
-        System.err.println("ERROR: " + c + " is not a supported command.");
-        //TODO make this exit with an error at some point
-      }
-    }
+
+    add = cl.hasOption("add");
   }
 }
-

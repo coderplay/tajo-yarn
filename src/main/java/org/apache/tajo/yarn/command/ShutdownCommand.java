@@ -18,27 +18,15 @@
 
 package org.apache.tajo.yarn.command;
 
+import org.apache.hadoop.conf.Configuration;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Options;
+public class ShutdownCommand extends TajoCommand {
+  public ShutdownCommand(Configuration conf) {
+    super(conf);
+  }
 
-public interface ClientCommand {
-  /**
-   * @return the options this client will process.
-   */
-  public Options getOpts();
-
-  /**
-   * @return header description for this command
-   */
-  public String getHeaderDescription();
-
-  /**
-   * Do the processing
-   * @param cl the arguments to process
-   * @throws Exception on any error
-   */
-  public void process(CommandLine cl) throws Exception;
+  @Override
+  public String getHeaderDescription() {
+    return "tajo-yarn shutdown";
+  }
 }
-
-

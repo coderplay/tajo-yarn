@@ -15,6 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
 package org.apache.tajo.yarn.command;
 
 import org.apache.commons.cli.CommandLine;
@@ -24,27 +26,43 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ApplicationReport;
+import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.*;
+import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
 
 import java.io.IOException;
 
-public class StartMasterCommand extends TajoAppCommand {
-  private static final Log LOG = LogFactory.getLog(StartMasterCommand.class);
+/**
+ * Base command class for Tajo operations
+ */
+public abstract class TajoCommand implements Command {
 
+  private static final Log LOG = LogFactory.getLog(TajoCommand.class);
+
+  /**
+   * appliction id sepcify a certain tajo cluster
+   */
   protected ApplicationId applicationId;
+  /**
+   * Thrift server connection
+   */
+  private TTransport transport;
 
-  public StartMasterCommand(Configuration conf) {
-    super(conf);
-  }
+  // Configuration
+  protected Configuration conf;
+  protected YarnClient yarnClient;
 
-  @Override
-  public String getHeaderDescription() {
-    return "tajo-yarn master ";
+  public TajoCommand(Configuration conf) {
+    this.conf = conf;
+    yarnClient = YarnClient.createYarnClient();
+    yarnClient.init(conf);
   }
 
   @Override
@@ -54,26 +72,33 @@ public class StartMasterCommand extends TajoAppCommand {
     return opts;
   }
 
-  protected TajoYarnService.Client getClient() throws YarnException, IOException, TTransportException {
+  protected TajoYarnService.Client getProtocol()
+      throws YarnException, IOException, TTransportException {
     ApplicationReport app = yarnClient.getApplicationReport(applicationId);
     LOG.info("Connecting to application rpc server " + app.getHost() + ":" + app.getRpcPort());
-    TTransport transport = new TFramedTransport(new TSocket(app.getHost(), app.getRpcPort()));
+    transport = new TFramedTransport(new TSocket(app.getHost(), app.getRpcPort()));
     transport.open();
     TProtocol protocol = new TBinaryProtocol(transport);
     TajoYarnService.Client client = new TajoYarnService.Client(protocol);
     return client;
   }
 
+  protected void closeProtocol() {
+    transport.close();
+  }
+
+
   @Override
   public void process(CommandLine cl) throws Exception {
-    LOG.info("Running Client");
-    yarnClient.start();
-
     String appIdStr = cl.getOptionValue("appId");
     if (appIdStr == null) {
       throw new IllegalArgumentException("-appId is required");
     }
     applicationId = ConverterUtils.toApplicationId(appIdStr);
-    getClient().startMaster();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Running Client");
+    }
+    yarnClient.start();
   }
+
 }

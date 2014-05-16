@@ -15,23 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.tajo.yarn.command;
 
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.yarn.client.api.YarnClient;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Options;
 
-public abstract class TajoAppCommand implements ClientCommand {
+public interface Command {
+  /**
+   * @return the options this client will process.
+   */
+  public Options getOpts();
 
-  // Configuration
-  protected Configuration conf;
-  protected YarnClient yarnClient;
+  /**
+   * @return header description for this command
+   */
+  public String getHeaderDescription();
 
-  public TajoAppCommand(Configuration conf) {
-    this.conf = conf;
-    yarnClient = YarnClient.createYarnClient();
-    yarnClient.init(conf);
-
-  }
-
+  /**
+   * Do the processing
+   * @param cl the arguments to process
+   * @throws Exception on any error
+   */
+  public void process(CommandLine cl) throws Exception;
 }
+
+

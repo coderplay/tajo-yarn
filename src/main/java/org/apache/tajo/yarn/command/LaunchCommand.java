@@ -52,7 +52,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-public class LaunchCommand extends TajoAppCommand {
+public class LaunchCommand extends TajoCommand {
   private static final Log LOG = LogFactory.getLog(LaunchCommand.class);
 
   // Application master specific info to register a new Application with RM/ASM

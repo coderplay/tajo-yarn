@@ -188,14 +188,6 @@ public class ApplicationMaster {
 
   private TServer server;
 
-  class TajoYarnServiceImpl implements TajoYarnService.Iface {
-
-    @Override
-    public void startMaster() throws TException {
-      LOG.info("Starting Tajo Master");
-    }
-  }
-
   /**
    * @param args Command line args
    */

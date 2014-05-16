@@ -27,10 +27,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.tajo.yarn.command.ClientCommand;
-import org.apache.tajo.yarn.command.HelpCommand;
-import org.apache.tajo.yarn.command.LaunchCommand;
-import org.apache.tajo.yarn.command.StartMasterCommand;
+import org.apache.tajo.yarn.command.*;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -43,6 +40,7 @@ public class Client {
 
   private static final Log LOG = LogFactory.getLog(Client.class);
 
+  // Configuration  for tajo-yarn rather than tajo
   private Configuration conf;
 
   public Client(Configuration conf) {
@@ -55,11 +53,12 @@ public class Client {
    */
   @SuppressWarnings("rawtypes")
   public void run(String[] args) throws Exception {
-    HashMap<String, ClientCommand> commands = new HashMap<String, ClientCommand>();
+    HashMap<String, Command> commands = new HashMap<String, Command>();
     HelpCommand help = new HelpCommand(commands);
     commands.put("help", help);
     commands.put("launch", new LaunchCommand(conf));
-    commands.put("startMaster", new StartMasterCommand(conf));
+    commands.put("qm", new QueryMasterOpCommand(conf));
+    commands.put("tr", new TaskRunnerOpCommand(conf));
 
     String commandName = null;
     String[] commandArgs = null;
@@ -70,7 +69,7 @@ public class Client {
       commandName = args[0];
       commandArgs = Arrays.copyOfRange(args, 1, args.length);
     }
-    ClientCommand command = commands.get(commandName);
+    Command command = commands.get(commandName);
     if (command == null) {
       LOG.error("ERROR: " + commandName + " is not a supported command.");
       help.printHelpFor(null);
