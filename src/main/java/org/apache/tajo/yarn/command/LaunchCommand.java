@@ -95,7 +95,7 @@ public class LaunchCommand extends TajoCommand {
 
   @Override
   public String getHeaderDescription() {
-    return "tajo-yarn launch <master.yaml>";
+    return "tajo-yarn launch";
   }
 
   @Override
@@ -303,9 +303,12 @@ public class LaunchCommand extends TajoCommand {
     vargs.add("-Xmx32m");
     // Set class name
     vargs.add(ApplicationMaster.class.getName());
-    if (debugFlag) {
-      vargs.add("--debug");
-    }
+
+    // Set params for Application Master
+    vargs.add("--qm_memory " + String.valueOf(qmMemory));
+    vargs.add("--qm_vcores " + String.valueOf(qmVCores));
+    vargs.add("--tr_memory " + String.valueOf(trMemory));
+    vargs.add("--tr_vcores " + String.valueOf(trVCores));
 
     vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout");
     vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr");

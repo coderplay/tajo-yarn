@@ -24,7 +24,6 @@ import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
 
 public class TaskRunnerOpCommand extends TajoCommand {
-  private boolean add = false;
 
   public TaskRunnerOpCommand(Configuration conf) {
     super(conf);
@@ -57,7 +56,5 @@ public class TaskRunnerOpCommand extends TajoCommand {
       throw new IllegalArgumentException(
           "number of task runners to be operated is required");
     }
-
-    add = cl.hasOption("add");
   }
 }

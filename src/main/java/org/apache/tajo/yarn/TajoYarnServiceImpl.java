@@ -18,15 +18,37 @@
 
 package org.apache.tajo.yarn;
 
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.yarn.api.records.Priority;
+import org.apache.hadoop.yarn.api.records.Resource;
+import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
+import org.apache.hadoop.yarn.util.Records;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 import org.apache.thrift.TException;
 
 public class TajoYarnServiceImpl implements TajoYarnService.Iface {
+  private static final Log LOG = LogFactory.getLog(TajoYarnServiceImpl.class);
 
+
+  private final Priority DEFAULT_PRIORITY = Records.newRecord(Priority.class);
+
+  private ClusterScheduler scheduler;
+
+  private TajoOnYarn tajoOnYarn;
+
+  public TajoYarnServiceImpl(ClusterScheduler scheduler, TajoOnYarn tajoOnYarn) {
+    this.scheduler = scheduler;
+    this.tajoOnYarn = tajoOnYarn;
+  }
 
   @Override
-  public void addQuerMaster(int number) throws TException {
-
+  public void addQueryMaster(int number) throws TException {
+    for(int i = 0; i < number; ++i) {
+      TajoContainerRequest containerAsk = tajoOnYarn.setupContainerAskForQM();
+      scheduler.addContainerRequest(containerAsk);
+    }
   }
 
   @Override
@@ -36,7 +58,10 @@ public class TajoYarnServiceImpl implements TajoYarnService.Iface {
 
   @Override
   public void addTaskRunners(int number) throws TException {
-
+    for(int i = 0; i < number; ++i) {
+      TajoContainerRequest containerAsk = tajoOnYarn.setupContainerAskForTR();
+      scheduler.addContainerRequest(containerAsk);
+    }
   }
 
   @Override
@@ -48,4 +73,6 @@ public class TajoYarnServiceImpl implements TajoYarnService.Iface {
   public void shutdown() throws TException {
 
   }
+
+
 }

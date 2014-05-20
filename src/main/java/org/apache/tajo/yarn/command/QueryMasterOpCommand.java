@@ -22,10 +22,9 @@ package org.apache.tajo.yarn.command;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.tajo.yarn.thrift.TajoYarnService;
 
 public class QueryMasterOpCommand extends TajoCommand {
-  private boolean add = false;
-
   public QueryMasterOpCommand(Configuration conf) {
     super(conf);
   }
@@ -38,12 +37,10 @@ public class QueryMasterOpCommand extends TajoCommand {
   @Override
   public Options getOpts() {
     Options opts = super.getOpts();
-    opts.addOption("add", false, "add a number of querymasters to the cluster");
-    opts.addOption("remove", false, "decomission a number of queryMasters from the cluster");
-    opts.addOption("num", false, "number of query masters to be added/decommissioned");
+    opts.addOption("add", true, "add a number of querymasters to the cluster");
+    opts.addOption("remove", true, "decomission a number of queryMasters from the cluster");
     return opts;
   }
-
 
   @Override
   public void process(CommandLine cl) throws Exception {
@@ -53,12 +50,24 @@ public class QueryMasterOpCommand extends TajoCommand {
           "You need to specify at least one of two options: -add or -remove");
     }
 
-    if(!cl.hasOption("num")) {
-      throw new IllegalArgumentException(
-          "number of query masters to be operated is required");
+    TajoYarnService.Client client = getProtocol();
+    if(cl.hasOption("add")) {
+      int num = Integer.parseInt(cl.getOptionValue("add"));
+      if(num < 0) {
+        throw new IllegalArgumentException(
+            "number of query masters must be > 0");
+      }
+      client.addQueryMaster(num);
+    } else {
+      int num = Integer.parseInt(cl.getOptionValue("remove"));
+      if(num < 0) {
+        throw new IllegalArgumentException(
+            "number of query masters must be > 0");
+      }
+      client.removeQueryMaster(num);
     }
 
-    add = cl.hasOption("add");
+    closeProtocol();
   }
 
 

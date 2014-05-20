@@ -1,3 +1,9 @@
+package org.apache.tajo.yarn;
+
+import org.apache.hadoop.yarn.api.records.Priority;
+import org.apache.hadoop.yarn.api.records.Resource;
+import org.apache.hadoop.yarn.client.api.AMRMClient;
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -6,31 +12,30 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+public class TajoContainerRequest extends AMRMClient.ContainerRequest {
+  LaunchContainerTask task;
 
-namespace java org.apache.tajo.yarn.thrift
+  public TajoContainerRequest(
+      Resource capability,
+      String[] hosts,
+      String[] racks,
+      Priority priority,
+      LaunchContainerTask cookie) {
+    super(capability, hosts, racks, priority);
+    this.task = cookie;
+  }
 
-service TajoYarnService {
-  // add a number of querymasters to the cluster
-  void addQueryMaster(1: i32 number);
-
-  // decomission a number of queryMasters from the cluster
-  void removeQueryMaster(1: i32 number);
-
-  // add a number of taskrunners to the cluster
-  void addTaskRunners(1: i32 number);
-
-  // decomission a number of taskrunners from the cluster
-  void removeTaskRunners(1: i32 number);
-
-  // shutdown the cluster
-  void shutdown();
+  LaunchContainerTask getTask() {
+    return task;
+  }
 }
+
