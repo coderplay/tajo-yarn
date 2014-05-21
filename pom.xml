@@ -134,7 +134,7 @@
               <goal>jar</goal>
             </goals>
             <!-- strictly speaking, the unit test is really a regression test.
-                It needs the main jar to be available to be able to run. -->
+                It needs the main jar to be available to be able to getLaunchContext. -->
             <phase>test-compile</phase>
           </execution>
         </executions>

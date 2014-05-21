@@ -102,25 +102,49 @@ public class ClusterScheduler {
 
     @Override
     public void onContainersAllocated(List<Container> containers) {
-      Map<TajoContainerRequest, Container> assignedContainers;
 
-//      if (LOG.isDebugEnabled()) {
+      if (LOG.isDebugEnabled()) {
         StringBuilder sb = new StringBuilder();
         for (Container container: containers) {
           sb.append(container.getId()).append(", ");
         }
-        LOG.info("Assigned New Containers: " + sb.toString());
-//      }
+        LOG.debug("Assigned New Containers: " + sb.toString());
+      }
 
       List<Container> modifiableContainerList = Lists.newLinkedList(containers);
 
-      for (Container container : containers) {
+      for (Container container : modifiableContainerList) {
         List<? extends Collection<TajoContainerRequest>> requestsList =
             amRmClient.getMatchingRequests(container.getPriority(),
                 ResourceRequest.ANY,
                 container.getResource());
+        LOG.info("containers size : " + requestsList.size());
+        LOG.info("containers type : " + requestsList.get(0).iterator().next().getTask().getClass().getName());
 
       }
+
+    }
+
+    private TajoContainerRequest getMatchingRequest(Container container,
+                                                    String location) {
+
+      Priority priority = container.getPriority();
+      Resource capability = container.getResource();
+      List<? extends Collection<TajoContainerRequest>> requestsList =
+          amRmClient.getMatchingRequests(priority, location, capability);
+
+      if (!requestsList.isEmpty()) {
+        // pick first one
+        for (Collection<TajoContainerRequest> requests : requestsList) {
+          for (TajoContainerRequest cookieContainerRequest : requests) {
+            if (canAssignTaskToContainer(cookieContainerRequest, container)) {
+              return cookieContainerRequest;
+            }
+          }
+        }
+      }
+
+      return null;
 
     }
 

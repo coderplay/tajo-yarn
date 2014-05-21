@@ -17,8 +17,12 @@
  */
 package org.apache.tajo.yarn;
 
+import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
+
+import java.io.IOException;
+
 public interface LaunchContainerTask {
 
-  public void run();
+  public ContainerLaunchContext getLaunchContext() throws IOException ;
 
 }

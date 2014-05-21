@@ -61,9 +61,9 @@ public class LaunchCommand extends TajoCommand {
   private int amPriority = 0;
   // Queue for App master
   private String amQueue = "";
-  // Amt. of memory resource to request for to run the App Master
+  // Amt. of memory resource to request for to getLaunchContext the App Master
   private int amMemory = 2048;
-  // Amt. of virtual core resource to request for to run the App Master
+  // Amt. of virtual core resource to request for to getLaunchContext the App Master
   private int amVCores = 4;
 
   private int qmMemory = 512;
@@ -107,9 +107,9 @@ public class LaunchCommand extends TajoCommand {
     opts.addOption("queue", true,
         "RM Queue in which this application is to be submitted. Default value - default");
     opts.addOption("master_memory", true,
-        "Amount of memory in MB to be requested to run the application master and Tajo Master. Default 2048");
+        "Amount of memory in MB to be requested to getLaunchContext the application master and Tajo Master. Default 2048");
     opts.addOption("master_vcores", true,
-        "Amount of virtual cores to be requested to run the application master and Tajo Master. Default 4");
+        "Amount of virtual cores to be requested to getLaunchContext the application master and Tajo Master. Default 4");
     opts.addOption("qm_memory", true,
         "Amount of memory in MB to be requested to launch a QueryMaster. Default 512");
     opts.addOption("qm_vcores", true,
@@ -176,7 +176,7 @@ public class LaunchCommand extends TajoCommand {
   }
 
   /**
-   * Main run function for launch this application
+   * Main getLaunchContext function for launch this application
    *
    * @return true if application completed successfully
    * @throws java.io.IOException
@@ -277,10 +277,10 @@ public class LaunchCommand extends TajoCommand {
     // Set the necessary security tokens as needed
     //amContainer.setContainerTokens(containerToken);
 
-    // Set the env variables to be setup in the env where the application master will be run
+    // Set the env variables to be setup in the env where the application master will be getLaunchContext
     setupEnv(amContainer);
 
-    // Set the necessary command to run the application master
+    // Set the necessary command to getLaunchContext the application master
     setupAMCommand(amContainer);
 
     // Service data is a binary blob that can be passed to the application

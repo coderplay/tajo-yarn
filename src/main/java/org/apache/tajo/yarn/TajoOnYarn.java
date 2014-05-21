@@ -59,8 +59,22 @@ public class TajoOnYarn {
 
   }
 
-  public void startQueryMaster() {
-
+  public void startQueryMaster() throws IOException {
+    LOG.info("Current working dir:"  + System.getProperty("user.dir"));
+    String tajoHome = System.getenv("TAJO_HOME");
+    List<String> script = new ArrayList<String>();
+    script.add("bin/tajo-daemon.sh");
+    script.add("start");
+    script.add("worker");
+    script.add("standby");
+    Shell.ShellCommandExecutor shell = new Shell.ShellCommandExecutor(
+        script.toArray(new String[script.size()]), new File(tajoHome));
+    try {
+      shell.execute();
+      LOG.info(shell.getOutput());
+    } catch (Shell.ExitCodeException e) {
+      LOG.warn(shell.getOutput());
+    }
   }
 
   public void startTaskRunner() {

@@ -20,7 +20,7 @@ bin=`cd "$bin"; pwd`
 
 # some Java parameters
 if [ "$JAVA_HOME" != "" ]; then
-  #echo "run java in $JAVA_HOME"
+  #echo "getLaunchContext java in $JAVA_HOME"
   JAVA_HOME=$JAVA_HOME
 fi
 

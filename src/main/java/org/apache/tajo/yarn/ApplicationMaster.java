@@ -101,7 +101,7 @@ public class ApplicationMaster {
    * Parse command line options
    *
    * @param args Command line args
-   * @return Whether init successful and run should be invoked
+   * @return Whether init successful and getLaunchContext should be invoked
    * @throws org.apache.commons.cli.ParseException
    * @throws java.io.IOException
    */
@@ -203,7 +203,7 @@ public class ApplicationMaster {
   }
 
   /**
-   * Main run function for the application master
+   * Main getLaunchContext function for the application master
    *
    * @throws org.apache.hadoop.yarn.exceptions.YarnException
    * @throws java.io.IOException

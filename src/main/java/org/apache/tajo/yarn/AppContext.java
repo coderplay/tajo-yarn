@@ -31,6 +31,7 @@ public class AppContext {
   // Application Attempt Id ( combination of attemptId and fail count )
   private ApplicationAttemptId appAttemptID;
 
+
   // TODO
   // For status update for clients - yet to be implemented
   // Hostname of the container
@@ -41,13 +42,13 @@ public class AppContext {
   private String appMasterTrackingUrl = "";
 
   // App Master configuration
-  // Memory to request for the container on which a Query Master will run
+  // Memory to request for the container on which a Query Master will getLaunchContext
   private int qmMemory = 512;
-  // VirtualCores to request for the container on which a Query Master will run
+  // VirtualCores to request for the container on which a Query Master will getLaunchContext
   private int qmVCores = 2;
-  // Memory to request for the container on which a Query Master will run
+  // Memory to request for the container on which a Query Master will getLaunchContext
   private int trMemory = 1024;
-  // VirtualCores to request for the container on which a Query Master will run
+  // VirtualCores to request for the container on which a Query Master will getLaunchContext
   private int trVCores = 4;
 
 
@@ -88,6 +89,9 @@ public class AppContext {
     return  null;
   }
 
+  public Configuration getConfiguration() {
+    return conf;
+  }
 
   public int getQmMemory() {
     return qmMemory;
