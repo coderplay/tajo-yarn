@@ -21,51 +21,60 @@ package org.apache.tajo.yarn;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.yarn.api.records.Priority;
-import org.apache.hadoop.yarn.api.records.Resource;
-import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
-import org.apache.hadoop.yarn.util.Records;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 import org.apache.thrift.TException;
+
+import java.io.IOException;
 
 public class TajoYarnServiceImpl implements TajoYarnService.Iface {
   private static final Log LOG = LogFactory.getLog(TajoYarnServiceImpl.class);
 
-
-  private final Priority DEFAULT_PRIORITY = Records.newRecord(Priority.class);
-
   private ClusterScheduler scheduler;
 
-  private TajoOnYarn tajoOnYarn;
+  private AppContext appContext;
 
-  public TajoYarnServiceImpl(ClusterScheduler scheduler, TajoOnYarn tajoOnYarn) {
+  public TajoYarnServiceImpl(ClusterScheduler scheduler, AppContext appContext) {
     this.scheduler = scheduler;
-    this.tajoOnYarn = tajoOnYarn;
+    this.appContext = appContext;
   }
 
+  @Deprecated
   @Override
   public void addQueryMaster(int number) throws TException {
-    for(int i = 0; i < number; ++i) {
-      TajoContainerRequest containerAsk = tajoOnYarn.setupContainerAskForQM();
-      scheduler.addContainerRequest(containerAsk);
-    }
   }
 
+  @Deprecated
   @Override
   public void removeQueryMaster(int number) throws TException {
 
   }
 
+  @Deprecated
   @Override
   public void addTaskRunners(int number) throws TException {
+  }
+
+  @Deprecated
+  @Override
+  public void removeTaskRunners(int number) throws TException {
+
+  }
+
+  @Override
+  public void addWorker(int number) throws TException {
     for(int i = 0; i < number; ++i) {
-      TajoContainerRequest containerAsk = tajoOnYarn.setupContainerAskForTR();
-      scheduler.addContainerRequest(containerAsk);
+      try {
+        ContainerTask task = new WorkerContainerTask(appContext);
+        TajoContainerRequest containerAsk = task.getContainerRequest();
+        scheduler.addContainerRequest(containerAsk);
+      } catch(IOException ioe) {
+        throw new TException(ioe);
+      }
     }
   }
 
   @Override
-  public void removeTaskRunners(int number) throws TException {
+  public void removeWorker(int number) throws TException {
 
   }
 

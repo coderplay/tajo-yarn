@@ -57,8 +57,7 @@ public class Client {
     HelpCommand help = new HelpCommand(commands);
     commands.put("help", help);
     commands.put("launch", new LaunchCommand(conf));
-    commands.put("qm", new QueryMasterOpCommand(conf));
-    commands.put("tr", new TaskRunnerOpCommand(conf));
+    commands.put("worker", new WorkerOpCommand(conf));
 
     String commandName = null;
     String[] commandArgs = null;

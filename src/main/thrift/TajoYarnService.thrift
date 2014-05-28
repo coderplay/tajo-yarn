@@ -19,6 +19,16 @@
 namespace java org.apache.tajo.yarn.thrift
 
 service TajoYarnService {
+  // add a number of tajo workers to the cluster
+  void addWorker(1: i32 number);
+
+  // add a number of tajo workers to the cluster
+  void removeWorker(1: i32 number);
+
+  // shutdown the cluster
+  void shutdown();
+
+
   // add a number of querymasters to the cluster
   void addQueryMaster(1: i32 number);
 
@@ -31,6 +41,5 @@ service TajoYarnService {
   // decomission a number of taskrunners from the cluster
   void removeTaskRunners(1: i32 number);
 
-  // shutdown the cluster
-  void shutdown();
+
 }

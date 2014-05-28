@@ -24,6 +24,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -66,11 +67,18 @@ public class LaunchCommand extends TajoCommand {
   // Amt. of virtual core resource to request for to getLaunchContext the App Master
   private int amVCores = 4;
 
+  @Deprecated
   private int qmMemory = 512;
+  @Deprecated
   private int qmVCores = 2;
 
+  @Deprecated
   private int trMemory = 1024;
+  @Deprecated
   private int trVCores = 4;
+
+  private int workerMemory = 2048;
+  private int workerVCores = 4;
 
   private String confDir = "";
 
@@ -140,6 +148,8 @@ public class LaunchCommand extends TajoCommand {
     qmVCores = Integer.parseInt(cl.getOptionValue("qm_vcores", "2"));
     trMemory = Integer.parseInt(cl.getOptionValue("tr_memory", "1024"));
     trVCores = Integer.parseInt(cl.getOptionValue("tr_vcores", "4"));
+    workerMemory = Integer.parseInt(cl.getOptionValue("worker_memory", "2048"));
+    workerVCores = Integer.parseInt(cl.getOptionValue("worker_vcores", "4"));
     confDir = cl.getOptionValue("conf_dir", "tajo-conf");
     log4jPropFile = cl.getOptionValue("log_properties", "");
 
@@ -173,6 +183,16 @@ public class LaunchCommand extends TajoCommand {
       throw new IllegalArgumentException("Invalid virtual cores specified for TaskRunner, exiting."
           + " Specified virtual cores=" + trVCores);
     }
+
+    if (workerMemory < 0) {
+      throw new IllegalArgumentException("Invalid memory specified for worker, exiting."
+          + " Specified memory=" + workerMemory);
+    }
+    if (workerVCores < 0) {
+      throw new IllegalArgumentException("Invalid virtual cores specified for worker, exiting."
+          + " Specified virtual cores=" + workerVCores);
+    }
+
   }
 
   /**
@@ -309,6 +329,9 @@ public class LaunchCommand extends TajoCommand {
     vargs.add("--qm_vcores " + String.valueOf(qmVCores));
     vargs.add("--tr_memory " + String.valueOf(trMemory));
     vargs.add("--tr_vcores " + String.valueOf(trVCores));
+    // Set params for Application Master
+    vargs.add("--worker_memory " + String.valueOf(workerMemory));
+    vargs.add("--worker_vcores " + String.valueOf(workerVCores));
 
     vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout");
     vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr");
@@ -347,14 +370,33 @@ public class LaunchCommand extends TajoCommand {
     addToLocalResources(fs, tajoArchive, "tajo", appId.getId(),
         localResources, LocalResourceType.ARCHIVE);
 
-    addToLocalResources(fs, confDir, "conf", appId.getId(),
-        localResources, LocalResourceType.FILE);
-
     // Set the log4j properties if needed
     if (!log4jPropFile.isEmpty()) {
       addToLocalResources(fs, log4jPropFile, log4jPath, appId.getId(),
           localResources, LocalResourceType.FILE);
     }
+
+//    addToLocalResources(fs, confDir, "conf", appId.getId(),
+//        localResources, LocalResourceType.FILE);
+
+    // Tajo master conf
+    Configuration tajoMasterConf = new Configuration(false);
+    tajoMasterConf.addResource(new Path(confDir, "tajo-site.xml"));
+    String suffix =
+        appName + "/" + appId.getId() + "/master-conf";
+    Path dst = new Path(fs.getHomeDirectory(), suffix);
+    fs.mkdirs(dst);
+    Path confFile = new Path(dst, "tajo-site.xml");
+    FSDataOutputStream fdos = fs.create(confFile);
+    tajoMasterConf.writeXml(fdos);
+    fdos.close();
+    FileStatus scFileStatus = fs.getFileStatus(dst);
+    LocalResource scRsrc =
+        LocalResource.newInstance(
+            ConverterUtils.getYarnUrlFromURI(dst.toUri()),
+            LocalResourceType.FILE, LocalResourceVisibility.APPLICATION,
+            scFileStatus.getLen(), scFileStatus.getModificationTime());
+    localResources.put("conf", scRsrc);
 
     amContainer.setLocalResources(localResources);
   }
@@ -389,7 +431,8 @@ public class LaunchCommand extends TajoCommand {
     }
 
     env.put("CLASSPATH", classPathEnv.toString());
-    env.put(Constants.TAJO_HOME, "$PWD/tajo/" + getTajoHomeInArchive(tajoArchive));
+    env.put(Constants.TAJO_ARCHIVE_ROOT, "tajo/" + getTajoRootInArchive(tajoArchive));
+    env.put(Constants.TAJO_HOME, "$PWD/${" + Constants.TAJO_ARCHIVE_ROOT + "}");
     env.put(Constants.TAJO_CONF_DIR, "$PWD/conf");
     env.put(Constants.TAJO_LOG_DIR, ApplicationConstants.LOG_DIR_EXPANSION_VAR);
     env.put(Constants.TAJO_CLASSPATH, "/export/apps/hadoop/site/lib/*");
@@ -490,7 +533,10 @@ public class LaunchCommand extends TajoCommand {
     throw new IOException("Fail to locat a JAR for class: " + clazz.getName());
   }
 
-  private void addToLocalResources(FileSystem fs,
+  /**
+   * @return Destinate n
+   */
+  private Path addToLocalResources(FileSystem fs,
                                    String fileSrcPath,
                                    String fileDstPath,
                                    int appId,
@@ -508,20 +554,21 @@ public class LaunchCommand extends TajoCommand {
             type, LocalResourceVisibility.APPLICATION,
             scFileStatus.getLen(), scFileStatus.getModificationTime());
     localResources.put(fileDstPath, scRsrc);
+    return dst;
   }
 
-  private String getTajoHomeInArchive(String archiveName) throws IOException {
+  private String getTajoRootInArchive(String archiveName) throws IOException {
     String lower = archiveName.toLowerCase();
     if (lower.endsWith(".zip")) {
-      return getTajoHomeInZip(archiveName);
+      return getTajoRootInZip(archiveName);
     } else if (lower.endsWith(".tar.gz") ||
         lower.endsWith(".tgz")) {
-      return getTajoHomeInTar(archiveName);
+      return getTajoRootInTar(archiveName);
     }
     throw new IOException("Unable to get tajo home dir from " + archiveName);
   }
 
-  private String getTajoHomeInZip(String zip) throws IOException {
+  private String getTajoRootInZip(String zip) throws IOException {
     ZipInputStream inputStream = null;
     try {
       inputStream = new ZipInputStream(new FileInputStream(zip));
@@ -541,7 +588,7 @@ public class LaunchCommand extends TajoCommand {
     throw new IOException("Unable to get tajo home dir from " + zip);
   }
 
-  private String getTajoHomeInTar(String tar) throws IOException {
+  private String getTajoRootInTar(String tar) throws IOException {
     TarArchiveInputStream inputStream = null;
     try {
       inputStream =

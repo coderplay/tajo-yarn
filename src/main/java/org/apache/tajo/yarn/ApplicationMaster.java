@@ -28,6 +28,7 @@ import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
@@ -48,8 +49,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Tajo-Yarn Application Master for YARN
@@ -67,8 +67,6 @@ public class ApplicationMaster {
 
   // Hardcoded path to custom log_properties
   private static final String log4jPath = "log4j.properties";
-
-  private ByteBuffer allTokens;
 
   private ClusterScheduler scheduler;
 
@@ -118,6 +116,10 @@ public class ApplicationMaster {
         "Amount of memory in MB to be requested to launch a TaskRunner. Default 1024");
     opts.addOption("tr_vcores", true,
         "Amount of virtual cores to be requested to launch a TaskRunner. Default 4");
+    opts.addOption("worker_memory", true,
+        "Amount of memory in MB to be requested to launch a worker. Default 2048");
+    opts.addOption("worker_vcores", true,
+        "Amount of virtual cores to be requested to launch a worker. Default 4");
     opts.addOption("help", false, "Print usage");
 
     CommandLine cliParser = new GnuParser().parse(opts, args);
@@ -184,11 +186,18 @@ public class ApplicationMaster {
         "tr_memory", "1024"));
     int trVCores = Integer.parseInt(cliParser.getOptionValue(
         "tr_vcores", "4"));
+    int workerMemory = Integer.parseInt(cliParser.getOptionValue(
+        "worker_memory", "2048"));
+    int workerVCores = Integer.parseInt(cliParser.getOptionValue(
+        "worker_vcores", "4"));
 
     int requestPriority = Integer.parseInt(cliParser
         .getOptionValue("priority", "0"));
 
-    this.appContext = new AppContext(conf, appAttemptID, qmMemory, qmVCores, trMemory, trVCores, requestPriority);
+    String appMasterHostName = InetAddress.getLocalHost().getHostName();
+
+    this.appContext = new AppContext(
+        conf, appAttemptID, workerMemory, workerVCores, requestPriority, appMasterHostName);
 
     return true;
   }
@@ -212,21 +221,7 @@ public class ApplicationMaster {
   public void run() throws YarnException, IOException {
     LOG.info("Starting ApplicationMaster");
 
-    Credentials credentials =
-        UserGroupInformation.getCurrentUser().getCredentials();
-    DataOutputBuffer dob = new DataOutputBuffer();
-    credentials.writeTokenStorageToStream(dob);
-    // Now remove the AM->RM token so that containers cannot access it.
-    Iterator<Token<?>> iter = credentials.getAllTokens().iterator();
-    while (iter.hasNext()) {
-      Token<?> token = iter.next();
-      if (token.getKind().equals(AMRMTokenIdentifier.KIND_NAME)) {
-        iter.remove();
-      }
-    }
-    allTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
-
-    TajoOnYarn tajoOnYarn = new TajoOnYarn(appContext);
+    startTajoMaster();
 
     TNonblockingServerSocket serverSocket;
     int appMasterRpcPort;
@@ -239,18 +234,35 @@ public class ApplicationMaster {
     }
 
     LOG.info("Starting cluster scheduler");
-    String appMasterHostName = InetAddress.getLocalHost().getHostName();
-    String appMasterTrackingUrl = StringHelper.join("http://", appMasterHostName, ":26080");
-    this.scheduler = new ClusterScheduler(appContext,
-        appMasterHostName, appMasterTrackingUrl, appMasterRpcPort, tajoOnYarn);
+    String appMasterTrackingUrl = StringHelper.join("http://", appContext.getMasterHost(), ":26080");
+    this.scheduler = new ClusterScheduler(appContext, appMasterTrackingUrl, appMasterRpcPort);
     scheduler.init(conf);
     scheduler.service();
 
-    LOG.info("Starting rpc server, listening on" + appMasterHostName + ":" + appMasterRpcPort);
+    LOG.info("Starting rpc server, listening on" + appContext.getMasterHost() + ":" + appMasterRpcPort);
     TProcessor processor = new TajoYarnService.Processor<TajoYarnService.Iface>(
-        new TajoYarnServiceImpl(scheduler, tajoOnYarn));
+        new TajoYarnServiceImpl(scheduler, appContext));
     this.server = new TNonblockingServer(new TNonblockingServer.Args(serverSocket).processor(processor));
     this.server.serve();
+  }
+
+
+  public void startTajoMaster() throws IOException {
+    LOG.info("Current working dir:"  + System.getProperty("user.dir"));
+    String tajoHome = System.getenv("TAJO_HOME");
+    List<String> script = new ArrayList<String>();
+    script.add("bin/tajo-daemon.sh");
+    script.add("start");
+    script.add("master");
+    Shell.ShellCommandExecutor shell = new Shell.ShellCommandExecutor(
+        script.toArray(new String[script.size()]), new File(tajoHome));
+    try {
+      shell.execute();
+      LOG.info(shell.getOutput());
+    } catch (Shell.ExitCodeException e) {
+      throw new IOException(e);
+    }
+
   }
 
   private boolean fileExist(String filePath) {

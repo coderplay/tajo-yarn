@@ -33,6 +33,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -50,27 +51,20 @@ public class ClusterScheduler {
   @SuppressWarnings("rawtypes")
   private final AMRMClientAsync amRmClient;
 
-  private final String appMasterHostname;
-
   private final String appMasterTrackingUrl;
 
   private final int appMasterRpcPort;
 
-  private final TajoOnYarn tajoOnYarn;
-
   private volatile boolean done;
 
-  public ClusterScheduler(AppContext appContext,
-      String appHostname, String trackingUrl, int rpcPort, TajoOnYarn tajoOnYarn) {
+  public ClusterScheduler(AppContext appContext, String trackingUrl, int rpcPort) {
     AMRMClientAsync.CallbackHandler allocListener = new RMCallbackHandler();
     this.amRmClient = AMRMClientAsync.createAMRMClientAsync(1000, allocListener);
     this.containerListener = new NMCallbackHandler(this);
     this.nmClientAsync = new NMClientAsyncImpl(containerListener);
     this.appContext = appContext;
-    this.appMasterHostname = appHostname;
     this.appMasterTrackingUrl = trackingUrl;
     this.appMasterRpcPort = rpcPort;
-    this.tajoOnYarn = tajoOnYarn;
   }
 
   public void init(Configuration conf) throws  YarnException, IOException {
@@ -81,11 +75,10 @@ public class ClusterScheduler {
   public void service() throws YarnException, IOException {
     // Register self with ResourceManager
     amRmClient.start();
+    nmClientAsync.start();
     RegisterApplicationMasterResponse response = amRmClient
-        .registerApplicationMaster(appMasterHostname, appMasterRpcPort,
+        .registerApplicationMaster(appContext.getMasterHost(), appMasterRpcPort,
             appMasterTrackingUrl);
-
-    tajoOnYarn.startMaster();
   }
 
 
@@ -97,7 +90,9 @@ public class ClusterScheduler {
 
     @Override
     public void onContainersCompleted(List<ContainerStatus> statuses) {
-
+      for(ContainerStatus status: statuses) {
+        LOG.info("STATUS:" + status.getExitStatus());
+      }
     }
 
     @Override
@@ -105,7 +100,7 @@ public class ClusterScheduler {
 
       if (LOG.isDebugEnabled()) {
         StringBuilder sb = new StringBuilder();
-        for (Container container: containers) {
+        for (Container container : containers) {
           sb.append(container.getId()).append(", ");
         }
         LOG.debug("Assigned New Containers: " + sb.toString());
@@ -113,17 +108,22 @@ public class ClusterScheduler {
 
       List<Container> modifiableContainerList = Lists.newLinkedList(containers);
 
-      for (Container container : modifiableContainerList) {
-        List<? extends Collection<TajoContainerRequest>> requestsList =
-            amRmClient.getMatchingRequests(container.getPriority(),
-                ResourceRequest.ANY,
-                container.getResource());
-        LOG.info("containers size : " + requestsList.size());
-        LOG.info("containers type : " + requestsList.get(0).iterator().next().getTask().getClass().getName());
-
+      Iterator<Container> containerIterator = modifiableContainerList.iterator();
+      while (containerIterator.hasNext()) {
+        Container container = containerIterator.next();
+        TajoContainerRequest containerRequest = getMatchingRequest(container, ResourceRequest.ANY);
+        if(containerRequest != null) {
+          LOG.info("Start container: " + container.getId());
+          ContainerTask task = containerRequest.getTask();
+          try {
+            nmClientAsync.startContainerAsync(container, task.getLaunchContext(container));
+          } catch (IOException ioe) {
+            LOG.error("", ioe);
+          }
+        }
       }
 
-    }
+     }
 
     private TajoContainerRequest getMatchingRequest(Container container,
                                                     String location) {
@@ -137,20 +137,16 @@ public class ClusterScheduler {
         // pick first one
         for (Collection<TajoContainerRequest> requests : requestsList) {
           for (TajoContainerRequest cookieContainerRequest : requests) {
-            if (canAssignTaskToContainer(cookieContainerRequest, container)) {
               return cookieContainerRequest;
-            }
           }
         }
       }
-
       return null;
-
     }
 
     @Override
     public void onShutdownRequest() {
-
+      LOG.info("SHUT DOWN");
     }
 
     @Override
@@ -160,26 +156,29 @@ public class ClusterScheduler {
 
     @Override
     public float getProgress() {
-      return 0;
+      return 50;
     }
 
     @Override
     public void onError(Throwable e) {
-
+      LOG.info("Error", e);
     }
   }
 
   @VisibleForTesting
-  static class NMCallbackHandler
+  class NMCallbackHandler
       implements NMClientAsync.CallbackHandler {
     private final ClusterScheduler scheduler;
 
     public NMCallbackHandler(ClusterScheduler scheduler) {
       this.scheduler = scheduler;
     }
+
     @Override
     public void onContainerStarted(ContainerId containerId, Map<String, ByteBuffer> allServiceResponse) {
-
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Succeeded to start Container " + containerId);
+      }
     }
 
     @Override
@@ -194,17 +193,17 @@ public class ClusterScheduler {
 
     @Override
     public void onStartContainerError(ContainerId containerId, Throwable t) {
-
+      LOG.info("Get Error", t);
     }
 
     @Override
     public void onGetContainerStatusError(ContainerId containerId, Throwable t) {
-
+      LOG.info("Get Status Error", t);
     }
 
     @Override
     public void onStopContainerError(ContainerId containerId, Throwable t) {
-
+      LOG.info("Get Stop Error", t);
     }
   }
 

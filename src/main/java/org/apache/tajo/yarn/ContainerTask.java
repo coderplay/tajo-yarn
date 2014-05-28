@@ -15,20 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.tajo.yarn;
 
+import org.apache.hadoop.yarn.api.records.Container;
+import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Properties;
 
-public class Config {
+public interface ContainerTask {
+
+  public TajoContainerRequest getContainerRequest() throws IOException;
 
 
-  public static Properties readConfig(String file) throws IOException {
-    Properties prop = new Properties();
-    prop.load(new FileInputStream(file));
-    return prop;
-  }
+  public ContainerLaunchContext getLaunchContext(Container container) throws IOException ;
+
 }

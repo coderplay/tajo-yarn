@@ -24,24 +24,21 @@ import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 
-/**
- * @deprecated
- */
-public class QueryMasterOpCommand extends TajoCommand {
-  public QueryMasterOpCommand(Configuration conf) {
+public class WorkerOpCommand extends TajoCommand {
+  public WorkerOpCommand(Configuration conf) {
     super(conf);
   }
 
   @Override
   public String getHeaderDescription() {
-    return "tajo-yarn qm";
+    return "tajo-yarn worker";
   }
 
   @Override
   public Options getOpts() {
     Options opts = super.getOpts();
-    opts.addOption("add", true, "add a number of querymasters to the cluster");
-    opts.addOption("remove", true, "decomission a number of queryMasters from the cluster");
+    opts.addOption("add", true, "add a number of workers to the cluster");
+    opts.addOption("remove", true, "decomission a number of workers from the cluster");
     return opts;
   }
 
@@ -60,14 +57,14 @@ public class QueryMasterOpCommand extends TajoCommand {
         throw new IllegalArgumentException(
             "number of query masters must be > 0");
       }
-      client.addQueryMaster(num);
+      client.addWorker(num);
     } else {
       int num = Integer.parseInt(cl.getOptionValue("remove"));
       if(num < 0) {
         throw new IllegalArgumentException(
             "number of query masters must be > 0");
       }
-      client.removeQueryMaster(num);
+      client.removeWorker(num);
     }
 
     closeProtocol();

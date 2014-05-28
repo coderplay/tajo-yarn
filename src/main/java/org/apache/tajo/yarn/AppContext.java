@@ -51,24 +51,53 @@ public class AppContext {
   // VirtualCores to request for the container on which a Query Master will getLaunchContext
   private int trVCores = 4;
 
+  // Memory to request for the container on which a worker will getLaunchContext
+  private int workerMemory = 2048;
+  // VirtualCores to request for the container on which a worker will getLaunchContext
+  private int workerVCores = 4;
+
 
   // Priority of the request
   private int requestPriority;
 
+
+  private String masterHost;
+
+  public AppContext(Configuration conf,
+                    ApplicationAttemptId appAttemptID,
+                    int workerMemory,
+                    int workerVCores,
+                    int requestPriority,
+                    String masterHost) {
+    this.conf = conf;
+    this.appAttemptID = appAttemptID;
+    this.workerMemory = workerMemory;
+    this.workerVCores = workerVCores;
+    this.requestPriority = requestPriority;
+    this.masterHost = masterHost;
+  }
+
+  @Deprecated
   public AppContext(Configuration conf,
                     ApplicationAttemptId appAttemptID,
                     int qmMemory,
                     int qmVCores,
                     int trMemory,
                     int trVCores,
-                    int requestPriority) {
+                    int workerMemory,
+                    int workerVCores,
+                    int requestPriority,
+                    String masterHost) {
     this.conf = conf;
     this.appAttemptID = appAttemptID;
     this.qmMemory = qmMemory;
     this.qmVCores = qmVCores;
     this.trMemory = trMemory;
     this.trVCores = trVCores;
+    this.workerMemory = workerMemory;
+    this.workerVCores = workerVCores;
     this.requestPriority = requestPriority;
+    this.masterHost = masterHost;
   }
 
 
@@ -81,37 +110,44 @@ public class AppContext {
   }
 
 
-  public TajoContainerRequest getQMContainerRequest() {
-    return null;
-  }
-
-  public TajoContainerRequest getTRContainerRequest() {
-    return  null;
-  }
-
   public Configuration getConfiguration() {
     return conf;
   }
 
+  @Deprecated
   public int getQmMemory() {
     return qmMemory;
   }
 
+  @Deprecated
   public int getQmVCores() {
     return qmVCores;
   }
 
+  @Deprecated
   public int getTrMemory() {
     return trMemory;
   }
 
+  @Deprecated
   public int getTrVCores() {
     return trVCores;
+  }
+
+  public int getWorkerMemory() {
+    return workerMemory;
+  }
+
+  public int getWorkerVCores() {
+    return workerVCores;
   }
 
   public int getRequestPriority() {
     return requestPriority;
   }
 
+  public String getMasterHost() {
+    return masterHost;
+  }
 
 }

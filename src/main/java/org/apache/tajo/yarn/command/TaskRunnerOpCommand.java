@@ -23,6 +23,9 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
 
+/**
+ * @deprecated
+ */
 public class TaskRunnerOpCommand extends TajoCommand {
 
   public TaskRunnerOpCommand(Configuration conf) {

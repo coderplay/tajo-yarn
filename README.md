@@ -26,9 +26,9 @@ Launch a tajo cluster with only TajoMaster started
 
 You will get the `application id` for this empty cluster.
 
-Add 3 QueryMasters into the cluster
+Add 3 Workers into the cluster
 
-    > bin/tajo-yarn qm -add 3 -appId the_application_id
+    > bin/tajo-yarn worker -appId the_application_id -add 3
 
 
 # Help

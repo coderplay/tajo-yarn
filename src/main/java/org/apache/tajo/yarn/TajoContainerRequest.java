@@ -22,19 +22,19 @@ import org.apache.hadoop.yarn.client.api.AMRMClient;
  * limitations under the License.
  */
 public class TajoContainerRequest extends AMRMClient.ContainerRequest {
-  LaunchContainerTask task;
+  ContainerTask task;
 
   public TajoContainerRequest(
       Resource capability,
       String[] hosts,
       String[] racks,
       Priority priority,
-      LaunchContainerTask cookie) {
+      ContainerTask cookie) {
     super(capability, hosts, racks, priority);
     this.task = cookie;
   }
 
-  LaunchContainerTask getTask() {
+  ContainerTask getTask() {
     return task;
   }
 }

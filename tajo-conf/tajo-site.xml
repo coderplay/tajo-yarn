@@ -18,9 +18,116 @@
 
 <configuration>
   <property>
+    <name>tajo.master.umbilical-rpc.address</name>
+    <value>0.0.0.0:26001</value>
+  </property>
+  <property>
+    <name>tajo.master.client-rpc.address</name>
+    <value>0.0.0.0:26002</value>
+  </property>
+  <property>
+    <name>tajo.master.info-http.address</name>
+    <value>0.0.0.0:26080</value>
+  </property>
+
+  <!--<property>-->
+    <!--<name>tajo.rootdir</name>-->
+    <!--<value>hdfs://lva1-spadesnn01.grid.linkedin.com:9000/user/mzhou/tajo</value>-->
+  <!--</property>-->
+  <!--<property>-->
+    <!--<name>tajo.username</name>-->
+    <!--<value>mzhou</value>-->
+  <!--</property>-->
+  <!--<property>-->
+    <!--<name>tajo.warehouse.directory</name>-->
+    <!--<value>hdfs://lva1-spadesnn01.grid.linkedin.com:9000/user/mzhou/tajo/warehouse</value>-->
+  <!--</property>-->
+  <!--<property>-->
+    <!--<name>tajo.staging.directory</name>-->
+    <!--<value>hdfs://lva1-spadesnn01.grid.linkedin.com:9000/user/mzhou/tajo/staging</value>-->
+  <!--</property>-->
+
+  <property>
+    <name>tajo.rootdir</name>
+    <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo</value>
+  </property>
+  <property>
+    <name>tajo.username</name>
+    <value>mzhou</value>
+  </property>
+  <property>
+    <name>tajo.warehouse.directory</name>
+    <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo/warehouse</value>
+  </property>
+  <property>
+    <name>tajo.staging.directory</name>
+    <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo/staging</value>
+  </property>
+
+  <property>
     <name>tajo.worker.tmpdir.locations</name>
     <value>${LOCAL_DIRS}</value>
   </property>
+  <property>
+    <name>tajo.worker.resource.memory-mb</name>
+    <value>12288</value>
+  </property>
+  <property>
+    <name>tajo.worker.resource.cpu-cores</name>
+    <value>24</value>
+  </property>
+  <property>
+    <name>tajo.worker.resource.disks</name>
+    <value>6</value>
+  </property>
+  <property>
+    <name>tajo.worker.tmpdir.cleanup-at-startup</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>tajo.worker.mode.querymaster</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>tajo.worker.mode.taskrunner</name>
+    <value>true</value>
+  </property>
+  <!-- <property>
+     <name>tajo.dist-query.join.partition-volume-mb</name>
+     <value>12000</value>
+     </property>
+     <property>
+     <name>tajo.dist-query.groupby.partition-volume-mb</name>
+     <value>12000</value>
+     </property>
+     <property>
+     <name>tajo.dist-query.sort.partition-volume-mb</name>
+     <value>12000</value>
+     </property>
+     <property>
+     <name>tajo.dist-query.join.task-volume-mb</name>
+     <value>1024</value>
+     </property>
+     <property>
+     <name>tajo.dist-query.groupby.task-volume-mb</name>
+     <value>1024</value>
+     </property>
+     <property>
+     <name>tajo.dist-query.sort.task-volume-mb</name>
+     <value>1024</value>
+     </property>
+     <property>
+     <name>tajo.executor.sort.external-buffer-num</name>
+     <value>4000000</value>
+     </property>
+     <property>
+     <name>tajo.executor.join.inner.in-memory-table-num</name>
+     <value>4000000</value>
+     </property>
+     <property>
+     <name>tajo.executor.join.inner.in-memory-hash-threshold-bytes</name>
+     <value>2000000000</value>
+     </property>-->
   <property>
     <name>tajo.executor.groupby.in-memory-hash-threshold-bytes</name>
     <value>2000000000</value>
@@ -33,4 +140,5 @@
     <name>tajo.resource.manager</name>
     <value>org.apache.tajo.master.rm.TajoWorkerResourceManager</value>
   </property>
+
 </configuration>

@@ -15,14 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.tajo.yarn;
+
+package org.apache.tajo.yarn.container;
+
 
 import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
 
 import java.io.IOException;
 
-public interface LaunchContainerTask {
+public interface ContainerTask {
 
-  public ContainerLaunchContext getLaunchContext() throws IOException ;
+  public ContainerLaunchContext getLaunchContext() throws IOException;
 
 }
