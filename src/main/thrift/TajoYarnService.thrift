@@ -22,7 +22,7 @@ service TajoYarnService {
   // add a number of tajo workers to the cluster
   void addWorker(1: i32 number);
 
-  // add a number of tajo workers to the cluster
+  // decommission a number of tajo workers from the cluster
   void removeWorker(1: i32 number);
 
   // shutdown the cluster
