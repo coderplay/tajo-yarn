@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.tajo.yarn;
+package org.apache.tajo.yarn.container;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -32,13 +32,14 @@ import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
+import org.apache.tajo.yarn.*;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class WorkerContainerTask implements ContainerTask {
+public class WorkerContainerTask implements org.apache.tajo.yarn.ContainerTask {
   private static final Log LOG = LogFactory.getLog(WorkerContainerTask.class);
 
   private AppContext appContext;
