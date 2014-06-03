@@ -99,7 +99,7 @@ public class WorkerContainerTask implements org.apache.tajo.yarn.ContainerTask {
     Path parentPath = new Path(fs.getHomeDirectory(), suffix);
 
     // tar ball
-    Path archivePath = new Path(parentPath, "tajo-dist/tajo-0.8.0.tar.gz");
+    Path archivePath = new Path(parentPath, System.getenv(Constants.TAJO_ARCHIVE_PATH));
     FileStatus archiveFs = fs.getFileStatus(archivePath);
     LocalResource archiveRsrc =
         LocalResource.newInstance(
@@ -112,6 +112,7 @@ public class WorkerContainerTask implements org.apache.tajo.yarn.ContainerTask {
     Configuration tajoWorkerConf = new Configuration(false);
     tajoWorkerConf.addResource(new Path("conf", "tajo-site.xml"));
     tajoWorkerConf.set(Constants.TAJO_MASTER_UMBILICAL_RPC_ADDRESS, appContext.getMasterHost() + ":26001");
+    tajoWorkerConf.set(Constants.CATALOG_ADDRESS, appContext.getMasterHost() + ":26005");
     Path dst = new Path(parentPath, container.getId() + Path.SEPARATOR + "worker-conf");
     fs.mkdirs(dst);
     Path confFile = new Path(dst, "tajo-site.xml");
@@ -152,7 +153,6 @@ public class WorkerContainerTask implements org.apache.tajo.yarn.ContainerTask {
 
     List<String> commands = new ArrayList<String>();
     commands.add(command.toString());
-    commands.add("iostat -x 1");
     launchContext.setCommands(commands);
     return launchContext;
   }

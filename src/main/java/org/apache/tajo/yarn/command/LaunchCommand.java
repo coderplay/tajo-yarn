@@ -431,11 +431,12 @@ public class LaunchCommand extends TajoCommand {
     }
 
     env.put("CLASSPATH", classPathEnv.toString());
+    env.put(Constants.TAJO_ARCHIVE_PATH, tajoArchive);
     env.put(Constants.TAJO_ARCHIVE_ROOT, "tajo/" + getTajoRootInArchive(tajoArchive));
     env.put(Constants.TAJO_HOME, "$PWD/${" + Constants.TAJO_ARCHIVE_ROOT + "}");
     env.put(Constants.TAJO_CONF_DIR, "$PWD/conf");
     env.put(Constants.TAJO_LOG_DIR, ApplicationConstants.LOG_DIR_EXPANSION_VAR);
-    env.put(Constants.TAJO_CLASSPATH, "/export/apps/hadoop/site/lib/*");
+    env.put(Constants.TAJO_CLASSPATH, "/export/apps/hadoop/site/lib/*:$PWD/" + libDir + "/*");
     amContainer.setEnvironment(env);
   }
 

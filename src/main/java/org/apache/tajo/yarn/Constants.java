@@ -28,6 +28,8 @@ import org.apache.hadoop.classification.InterfaceStability;
 @InterfaceStability.Unstable
 public class Constants {
 
+  public static final String TAJO_ARCHIVE_PATH = "TAJO_ARCHIVE_PATH";
+
   public static final String TAJO_ARCHIVE_ROOT = "TAJO_ARCHIVE_ROOT";
 
   public static final String TAJO_HOME = "TAJO_HOME";
@@ -40,5 +42,7 @@ public class Constants {
 
   // Tajo Master Service Addresses
   public static final String TAJO_MASTER_UMBILICAL_RPC_ADDRESS = "tajo.master.umbilical-rpc.address";
+
+  public static final String CATALOG_ADDRESS = "tajo.catalog.client-rpc.address";
 
 }

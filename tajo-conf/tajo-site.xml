@@ -17,6 +17,7 @@
 <!-- Put site-specific property overrides in this file. -->
 
 <configuration>
+
   <property>
     <name>tajo.master.umbilical-rpc.address</name>
     <value>0.0.0.0:26001</value>
@@ -29,14 +30,14 @@
     <name>tajo.master.info-http.address</name>
     <value>0.0.0.0:26080</value>
   </property>
+  <property>
+    <name>tajo.catalog.client-rpc.address</name>
+    <value>0.0.0.0:26005</value>
+  </property>
 
   <!--<property>-->
     <!--<name>tajo.rootdir</name>-->
     <!--<value>hdfs://lva1-spadesnn01.grid.linkedin.com:9000/user/mzhou/tajo</value>-->
-  <!--</property>-->
-  <!--<property>-->
-    <!--<name>tajo.username</name>-->
-    <!--<value>mzhou</value>-->
   <!--</property>-->
   <!--<property>-->
     <!--<name>tajo.warehouse.directory</name>-->
@@ -52,16 +53,29 @@
     <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo</value>
   </property>
   <property>
-    <name>tajo.username</name>
-    <value>mzhou</value>
-  </property>
-  <property>
     <name>tajo.warehouse.directory</name>
     <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo/warehouse</value>
   </property>
   <property>
     <name>tajo.staging.directory</name>
     <value>hdfs://esv4-hcl281.grid.linkedin.com:9000/user/mzhou/tajo/staging</value>
+  </property>
+
+  <property>
+    <name>tajo.catalog.store.class</name>
+    <value>org.apache.tajo.catalog.store.MySQLStore</value>
+  </property>
+  <property>
+    <name>tajo.catalog.jdbc.connection.id</name>
+    <value>root</value>
+  </property>
+  <property>
+    <name>tajo.catalog.jdbc.connection.password</name>
+    <value>root</value>
+  </property>
+  <property>
+    <name>tajo.catalog.jdbc.uri</name>
+    <value>jdbc:mysql://esv4-hcl281.grid.linkedin.com:3306/tajo?createDatabaseIfNotExist=true</value>
   </property>
 
   <property>

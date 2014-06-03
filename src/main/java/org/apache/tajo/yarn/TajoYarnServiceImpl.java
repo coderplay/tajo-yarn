@@ -21,6 +21,7 @@ package org.apache.tajo.yarn;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.tajo.yarn.container.WorkerContainerTask;
 import org.apache.tajo.yarn.thrift.TajoYarnService;
 import org.apache.thrift.TException;
 
